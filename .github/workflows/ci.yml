@@ -15,7 +15,7 @@ jobs:
         python: ['3.11', '3.12']
     runs-on: ${{ matrix.os }}
     env:
-      QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'offscreen' }}
+      QT_QPA_PLATFORM: ${{ matrix.os == 'windows-latest' && 'windows' || 'offscreen' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
