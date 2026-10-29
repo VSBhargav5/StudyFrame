@@ -1,0 +1,39 @@
+name: Offline checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'offscreen' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install Qt runtime libraries on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 fonts-dejavu-core
+      - name: Install pinned Python dependencies
+        run: python -m pip install --only-binary=:all: -r requirements.txt
+      - name: Install the application package
+        run: python -m pip install --no-deps .
+      - name: Test offline behavior and actual Qt widgets
+        run: python -m unittest discover -s tests -v
+      - name: Render a synthetic study session
+        run: python -m examples.demo --snapshot out/demo.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-study-${{ matrix.os }}-${{ matrix.python }}
+          path: out/demo.png
