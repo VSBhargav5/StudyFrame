@@ -4,7 +4,9 @@ A personal Python desktop workspace for studying code and screenshots on Windows
 
 The first slice helps you organize a question: choose a saved screenshot, inspect
 it, add notes or code, and prepare a hint, explanation, or debugging request.
-It does **not** interpret images or generate AI answers yet.
+You can then explicitly send the reviewed text and selected image to OpenAI for
+study help. This integration is tested offline; live answer quality and account
+access have not yet been verified.
 
 ## Run on Windows
 
@@ -16,7 +18,8 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m studyframe
 ```
 
-No Node.js, Electron, API key, local server, or database is required. Dependencies
+No Node.js, Electron, local server, or database is required. An API key is needed
+only for live AI requests. Dependencies
 are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
 `python -m pip install .` exposes the `studyframe` desktop entry point.
 
@@ -33,7 +36,7 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
   and system clipboard are unchanged. This is not secure memory erasure.
 
 Nothing is automatically captured, uploaded, persisted as history, or executed.
-There is no OCR, screen capture, audio capture, provider, telemetry, or model SDK.
+There is no local OCR, screen capture, audio capture, telemetry, or model SDK.
 The file picker and OS clipboard are operating-system facilities; OS/cloud
 clipboard history is outside StudyFrame's control.
 
@@ -45,6 +48,24 @@ Qt-reported animations are rejected, but there is no independent APNG parser.
 Large supported images decode synchronously; UI responsiveness is not benchmarked.
 
 ## Verify and learn
+
+For AI help: prepare your question, inspect the full text and image, enter your
+own OpenAI API key in the masked session field, check the review box, then click
+**Send reviewed request**. Never paste a key into an issue, chat, or repository.
+The app sends to `https://api.openai.com/v1/responses` using `gpt-4.1-mini`.
+The whole selected file, including embedded metadata, is sent; no chat history
+is included. API usage is billed. The key is not saved by the app and Clear
+session removes it from the field; this is not secure memory erasure.
+
+The request is asynchronous, limited to 1,500 output tokens, with a 60-second
+local deadline and 1 MiB response cap. No automatic retries or redirects occur.
+Cancel/close stops the local request; it cannot guarantee provider cancellation
+or prevent charges. Failures retain your question. Changes discard the old
+answer and require a new review. Answers are plain text and never executed.
+`store=false` is sent, but does not promise zero provider retention.
+
+See [AI workflow and first principles](docs/ai-workflow.md) for the provider
+contract, limits, and a 60–90 minute exercise.
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v

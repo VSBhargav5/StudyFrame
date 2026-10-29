@@ -6,8 +6,10 @@ step without losing control of what leaves the computer.
 
 ## Current foundation
 
-Local image preview plus question/context preparation. The image and text remain
-separate: copying a prepared request copies only text. There is no model answer.
+Local image preview plus question/context preparation and an explicit OpenAI
+send/cancel path are implemented. Copying a prepared request still copies only
+text; Send includes the selected image. Provider behavior is mock-tested; no live
+answer or usefulness claim is established. See [AI workflow](ai-workflow.md).
 The image hash identifies the bytes selected for preview; it does not establish
 truth, correctness, completeness, or safe sharing.
 

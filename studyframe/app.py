@@ -7,16 +7,19 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
-    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox,
 )
 
 from studyframe.images import ImageError, LoadedImage, load_image
 from studyframe.requests import RequestError, prepare_request
+from studyframe.provider import StudyProvider, payload, MODEL
 
 
 class StudyWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, provider=None):
         super().__init__()
+        self.provider = provider or StudyProvider(self)
+        self.busy = False
         self.attachment: LoadedImage | None = None
         self.setWindowTitle("StudyFrame")
         self.resize(1100, 780)
@@ -30,8 +33,8 @@ class StudyWindow(QMainWindow):
         root.addWidget(title)
         root.addWidget(QLabel("Make sense of the code and material in front of you."))
         self.notice = QLabel(
-            "Local workspace · No AI connected. Images stay in this session; "
-            "copied text goes to your clipboard."
+            "Prepare locally, then choose whether to send to OpenAI. "
+            "AI answers can be wrong: predict, ask, then verify."
         )
         self.notice.setWordWrap(True)
         root.addWidget(self.notice)
@@ -95,6 +98,29 @@ class StudyWindow(QMainWindow):
         actions.addWidget(self.copy_button)
         actions.addWidget(self.clear_button)
         right.addLayout(actions)
+        right.addWidget(QLabel(f"3. Ask OpenAI · {MODEL} · api.openai.com"))
+        self.key = QLineEdit()
+        self.key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.key.setPlaceholderText("Your OpenAI API key — this session only")
+        self.key.setAccessibleName("OpenAI API key")
+        right.addWidget(self.key)
+        disclosure = QLabel("Send includes the entire selected file, including embedded metadata. "
+                            "No chat history is sent. API charges apply; store=false is not a zero-retention guarantee.")
+        disclosure.setWordWrap(True)
+        right.addWidget(disclosure)
+        self.consent = QCheckBox("I reviewed the text and image for sending")
+        right.addWidget(self.consent)
+        self.send_button = QPushButton("Send reviewed request")
+        self.send_button.setEnabled(False)
+        self.cancel_button = QPushButton("Cancel request")
+        self.cancel_button.setEnabled(False)
+        right.addWidget(self.send_button)
+        right.addWidget(self.cancel_button)
+        self.answer = QPlainTextEdit()
+        self.answer.setReadOnly(True)
+        self.answer.setAccessibleName("AI study answer")
+        self.answer.setPlaceholderText("AI answer — verify it with a small example. No code is executed.")
+        right.addWidget(self.answer, 1)
         self.status = QLabel("Ready. Start with one question.")
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -124,10 +150,72 @@ class StudyWindow(QMainWindow):
         self.question.textChanged.connect(self.invalidate)
         self.context.textChanged.connect(self.invalidate)
         self.mode.currentIndexChanged.connect(self.invalidate)
+        self.consent.toggled.connect(self.update_send)
+        self.key.textChanged.connect(self.update_send)
+        self.send_button.clicked.connect(self.send_request)
+        self.cancel_button.clicked.connect(self.cancel_request)
+        self.provider.succeeded.connect(self.receive_answer)
+        self.provider.failed.connect(self.receive_error)
+
+    def update_send(self):
+        self.send_button.setEnabled(bool(self.preview.toPlainText()) and bool(self.key.text())
+                                    and self.consent.isChecked() and not self.busy)
+
+    def set_busy(self, busy):
+        self.busy = busy
+        for widget in (self.question, self.context, self.mode, self.choose_button,
+                       self.prepare_button, self.key, self.consent):
+            widget.setEnabled(not busy)
+        self.remove_button.setEnabled(not busy and self.attachment is not None)
+        self.cancel_button.setEnabled(busy)
+        self.update_send()
+
+    def send_request(self):
+        if not self.send_button.isEnabled():
+            return
+        body = payload(self.preview.toPlainText(), self.attachment)
+        self.answer.clear()
+        self.set_busy(True)
+        self.status.setText("Waiting for OpenAI. You can cancel; submitted requests may still be billed.")
+        try:
+            self.provider.send(body, self.key.text())
+        except ValueError as exc:
+            self.receive_error(str(exc))
+
+    def receive_answer(self, text):
+        if not self.busy:
+            return
+        self.set_busy(False)
+        self.consent.setChecked(False)
+        self.answer.setPlainText(text)
+        self.status.setText("AI answer received. Check its reasoning with a small example before relying on it.")
+
+    def receive_error(self, message):
+        if not self.busy:
+            return
+        self.set_busy(False)
+        self.consent.setChecked(False)
+        self.status.setText(message)
+
+    def cancel_request(self):
+        self.provider.cancel()
+        self.set_busy(False)
+        self.consent.setChecked(False)
+        self.status.setText("Cancelled locally. OpenAI may still process and bill what was already sent.")
+
+    def closeEvent(self, event):
+        self.provider.cancel()
+        self.key.clear()
+        super().closeEvent(event)
 
     def invalidate(self):
+        if self.busy:
+            self.cancel_request()
+        self.consent.setChecked(False)
+        self.answer.clear()
         self.preview.clear()
         self.copy_button.setEnabled(False)
+        self.update_send()
         self.status.setText("Inputs changed. Prepare a new request when ready.")
 
     def choose_image(self):
@@ -190,6 +278,8 @@ class StudyWindow(QMainWindow):
             self.status.setText("Text copied. The clipboard may keep it after this session is cleared.")
 
     def clear_session(self):
+        self.cancel_request()
+        self.key.clear()
         self.question.clear()
         self.context.clear()
         self.mode.setCurrentIndex(0)
