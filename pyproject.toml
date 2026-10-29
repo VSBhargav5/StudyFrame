@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "studyframe"
+version = "0.1.0"
+description = "A personal Python desktop workspace for studying code and screenshots"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["PySide6-Essentials==6.12.0"]
+license = {file = "LICENSE"}
+
+[project.gui-scripts]
+studyframe = "studyframe.app:main"
+
+[tool.setuptools.packages.find]
+include = ["studyframe*"]
