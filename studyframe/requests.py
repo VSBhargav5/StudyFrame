@@ -22,7 +22,7 @@ _MODE_INSTRUCTIONS = {
 }
 
 
-def prepare_request(question: str, context: str = "", mode: str = "hint") -> str:
+def prepare_request(question: str, context: str = "", mode: str = "hint", *, previous=None) -> str:
     """Validate raw limits, trim the question, and preserve reference code exactly.
 
     Lengths count Python Unicode code points, not bytes or displayed glyphs.
@@ -53,4 +53,14 @@ def prepare_request(question: str, context: str = "", mode: str = "hint") -> str
     ]
     if context.strip():
         sections.append(f"Reference material:\n{context}")
+    if previous is not None:
+        if (not isinstance(previous, tuple) or len(previous) != 2
+                or any(not isinstance(part, str) or not part.strip() for part in previous)):
+            raise RequestError("The previous exchange must contain a question and answer.")
+        prior_question, prior_answer = previous
+        if len(prior_question) > 4000 or len(prior_answer) > 12000:
+            raise RequestError("This answer is too long for a follow-up. Start a new question instead.")
+        sections.append("Previous exchange (reference only; the AI answer may contain mistakes). "
+                        "Only this exchange is included, not the full conversation.\n"
+                        f"Previous question:\n{prior_question}\n\nPrevious AI answer:\n{prior_answer}")
     return "\n\n".join(sections)

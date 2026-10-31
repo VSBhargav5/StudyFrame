@@ -20,6 +20,9 @@ class StudyWindow(QMainWindow):
         super().__init__()
         self.provider = provider or StudyProvider(self)
         self.busy = False
+        self.last_exchange = None
+        self.followup_context = None
+        self.sent_question = ""
         self.attachment: LoadedImage | None = None
         self.setWindowTitle("StudyFrame")
         self.resize(1100, 780)
@@ -49,7 +52,7 @@ class StudyWindow(QMainWindow):
         question_page, review_page, answer_page = QWidget(), QWidget(), QWidget()
         question_layout, review_layout, answer_layout = QVBoxLayout(question_page), QVBoxLayout(review_page), QVBoxLayout(answer_page)
         self.tabs.addTab(question_page, "1. Question")
-        self.tabs.addTab(review_page, "2. Review & send")
+        self.tabs.addTab(review_page, "2. Review and send")
         self.tabs.addTab(answer_page, "3. Answer")
 
         left.addWidget(QLabel("1. Add what you are studying"))
@@ -87,6 +90,11 @@ class StudyWindow(QMainWindow):
         self.question.setAccessibleName("Your question")
         self.question.setPlaceholderText("What would you like to understand?")
         question_layout.addWidget(self.question, 1)
+        self.followup_note = QLabel("New question. No previous exchange will be sent.")
+        self.followup_note.setWordWrap(True)
+        question_layout.addWidget(self.followup_note)
+        self.new_topic_button = QPushButton("Start a new question")
+        question_layout.addWidget(self.new_topic_button)
         self.prepare_button = QPushButton("Prepare request")
         self.prepare_button.setObjectName("primary")
         question_layout.addWidget(self.prepare_button)
@@ -111,7 +119,8 @@ class StudyWindow(QMainWindow):
         self.key.setAccessibleName("OpenAI API key")
         review_layout.addWidget(self.key)
         disclosure = QLabel("Send includes the entire selected file, including embedded metadata. "
-                            "No chat history is sent. API charges apply; store=false is not a zero-retention guarantee.")
+                            "A follow-up includes the previous question and answer shown above. "
+                            "API charges apply; store=false is not a zero-retention guarantee.")
         disclosure.setWordWrap(True)
         review_layout.addWidget(disclosure)
         self.consent = QCheckBox("I reviewed the text and image for sending")
@@ -121,7 +130,6 @@ class StudyWindow(QMainWindow):
         self.cancel_button = QPushButton("Cancel request")
         self.cancel_button.setEnabled(False)
         review_layout.addWidget(self.send_button)
-        root.addWidget(self.cancel_button)
         self.answer = QPlainTextEdit()
         self.answer.setReadOnly(True)
         self.answer.setAccessibleName("AI study answer")
@@ -130,7 +138,13 @@ class StudyWindow(QMainWindow):
         self.copy_answer_button = QPushButton("Copy answer")
         self.copy_answer_button.setEnabled(False)
         answer_layout.addWidget(self.copy_answer_button)
-        root.addWidget(self.clear_button)
+        self.followup_button = QPushButton("Ask a follow-up")
+        self.followup_button.setEnabled(False)
+        answer_layout.addWidget(self.followup_button)
+        footer = QHBoxLayout()
+        footer.addWidget(self.cancel_button)
+        footer.addWidget(self.clear_button)
+        root.addLayout(footer)
         self.status = QLabel("Ready. Start with one question.")
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -159,7 +173,7 @@ class StudyWindow(QMainWindow):
         self.copy_answer_button.clicked.connect(self.copy_answer)
         self.clear_button.clicked.connect(self.clear_session)
         self.question.textChanged.connect(self.invalidate)
-        self.context.textChanged.connect(self.invalidate)
+        self.context.textChanged.connect(self.material_changed)
         self.mode.currentIndexChanged.connect(self.invalidate)
         self.consent.toggled.connect(self.update_send)
         self.key.textChanged.connect(self.update_send)
@@ -167,6 +181,35 @@ class StudyWindow(QMainWindow):
         self.cancel_button.clicked.connect(self.cancel_request)
         self.provider.succeeded.connect(self.receive_answer)
         self.provider.failed.connect(self.receive_error)
+        self.followup_button.clicked.connect(self.start_followup)
+        self.new_topic_button.clicked.connect(self.new_topic)
+
+    def material_changed(self):
+        self.followup_context = None
+        self.followup_note.setText("New question. No previous exchange will be sent.")
+        self.invalidate()
+
+    def new_topic(self):
+        self.material_changed()
+        self.question.clear()
+        self.tabs.setCurrentIndex(0)
+        self.question.setFocus()
+
+    def start_followup(self):
+        if self.last_exchange is None or self.busy:
+            return
+        try:
+            prepare_request("Check follow-up bounds", previous=self.last_exchange)
+        except RequestError as exc:
+            self.status.setText(str(exc))
+            return
+        self.followup_context = self.last_exchange
+        self.question.clear()
+        self.invalidate()
+        self.followup_note.setText("Follow-up: the last question and AI answer will appear in the request preview. "
+                                   "Current image and notes are included again. Editing either starts a new question.")
+        self.tabs.setCurrentIndex(0)
+        self.question.setFocus()
 
     def update_send(self):
         self.send_button.setEnabled(bool(self.preview.toPlainText()) and bool(self.key.text())
@@ -179,6 +222,7 @@ class StudyWindow(QMainWindow):
             widget.setEnabled(not busy)
         self.remove_button.setEnabled(not busy and self.attachment is not None)
         self.cancel_button.setEnabled(busy)
+        self.followup_button.setEnabled(not busy and self.last_exchange is not None)
         self.update_send()
 
     def send_request(self):
@@ -186,6 +230,8 @@ class StudyWindow(QMainWindow):
             return
         body = payload(self.preview.toPlainText(), self.attachment)
         self.answer.clear()
+        self.copy_answer_button.setEnabled(False)
+        self.sent_question = self.question.toPlainText().strip()
         self.set_busy(True)
         self.status.setText("Waiting for OpenAI. You can cancel; submitted requests may still be billed.")
         try:
@@ -199,6 +245,10 @@ class StudyWindow(QMainWindow):
         self.set_busy(False)
         self.consent.setChecked(False)
         self.answer.setPlainText(text)
+        self.last_exchange = (self.sent_question, text)
+        self.followup_context = None
+        self.followup_note.setText("New question. Use Ask a follow-up on the Answer tab to include the last exchange.")
+        self.followup_button.setEnabled(True)
         self.copy_answer_button.setEnabled(True)
         self.tabs.setCurrentIndex(2)
         self.status.setText("AI answer received. Check its reasoning with a small example before relying on it.")
@@ -226,6 +276,8 @@ class StudyWindow(QMainWindow):
             self.cancel_request()
         self.consent.setChecked(False)
         self.answer.clear()
+        self.last_exchange = None
+        self.followup_button.setEnabled(False)
         self.copy_answer_button.setEnabled(False)
         self.preview.clear()
         self.copy_button.setEnabled(False)
@@ -247,7 +299,7 @@ class StudyWindow(QMainWindow):
             self.status.setText(f"{exc} Previous selection kept.")
             return
         self.attachment = selected
-        self.invalidate()
+        self.material_changed()
         self.image_info.setText(f"{Path(path).name} · {selected.width} × {selected.height} · Local preview")
         self.remove_button.setEnabled(True)
         self.render_image()
@@ -272,12 +324,13 @@ class StudyWindow(QMainWindow):
         self.image_label.setText("Choose a saved PNG or JPEG. Nothing is captured automatically.")
         self.image_info.setText("No image selected")
         self.remove_button.setEnabled(False)
-        self.invalidate()
+        self.material_changed()
 
     def prepare(self):
         self.invalidate()
         try:
-            text = prepare_request(self.question.toPlainText(), self.context.toPlainText(), self.mode.currentData())
+            text = prepare_request(self.question.toPlainText(), self.context.toPlainText(), self.mode.currentData(),
+                                   previous=self.followup_context)
         except RequestError as exc:
             self.status.setText(str(exc))
             return

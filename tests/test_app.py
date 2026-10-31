@@ -144,6 +144,22 @@ class WindowTests(unittest.TestCase):
             self.window.question.setPlainText("A different question")
             self.assertFalse(self.window.copy_answer_button.isEnabled())
 
+    def test_image_change_resets_followup_but_failed_replacement_keeps_it(self):
+        self.window.select_image(self.path)
+        self.window.sent_question = "Why?"
+        self.window.busy = True
+        self.window.receive_answer("Synthetic answer")
+        self.window.start_followup()
+        self.window.question.setPlainText("What next?")
+        self.window.prepare()
+        previous = self.window.followup_context
+        self.window.select_image(Path(self.temp.name) / "missing.png")
+        self.assertEqual(self.window.followup_context, previous)
+        self.assertIn("Previous AI answer:", self.window.preview.toPlainText())
+        self.window.select_image(self.path)
+        self.assertIsNone(self.window.followup_context)
+        self.assertEqual(self.window.preview.toPlainText(), "")
+
 
 if __name__ == "__main__":
     unittest.main()
