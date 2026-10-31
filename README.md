@@ -25,6 +25,14 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
 
 ## What works
 
+- Question, Review & send, and Answer tabs keep each step in its own workspace.
+  Preparing opens the review; a completed answer opens the answer tab. Cancel
+  and Clear session stay available below the workspace. Copy answer is explicit.
+- Ask a follow-up carries only the last question and AI answer into the next
+  prepared text. Type a new question, review the complete combined request and
+  consent again. The current notes/image are sent again; older turns are omitted.
+  Start a new question or change the notes/image to drop that previous exchange.
+
 - Choose one saved PNG/JPEG; inspect, replace, or remove its local preview.
 - Image loading checks content, reads one bounded byte snapshot, handles JPEG
   orientation, and rejects unreadable or oversized images.
@@ -53,8 +61,9 @@ For AI help: prepare your question, inspect the full text and image, enter your
 own OpenAI API key in the masked session field, check the review box, then click
 **Send reviewed request**. Never paste a key into an issue, chat, or repository.
 The app sends to `https://api.openai.com/v1/responses` using `gpt-4.1-mini`.
-The whole selected file, including embedded metadata, is sent; no chat history
-is included. API usage is billed. The key is not saved by the app and Clear
+The whole selected file, including embedded metadata, is sent. A follow-up also
+includes the last question and answer, displayed in the prepared text; a new
+question has no previous exchange. API usage is billed. The key is not saved by the app and Clear
 session removes it from the field; this is not secure memory erasure.
 
 The request is asynchronous, limited to 1,500 output tokens, with a 60-second
@@ -66,6 +75,13 @@ answer and require a new review. Answers are plain text and never executed.
 
 See [AI workflow and first principles](docs/ai-workflow.md) for the provider
 contract, limits, and a 60–90 minute exercise.
+
+Follow-ups include one exchange from memory. The current request preview and
+answer remain visible until invalidated or cleared. Previous questions are limited to
+4,000 characters and answers to 12,000; oversized answers can still be read and
+copied, but cannot start a follow-up. They are never silently truncated. This is
+bounded context, not complete conversation memory. Clear session drops retained
+exchanges and the key; it does not guarantee secure memory erasure.
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v

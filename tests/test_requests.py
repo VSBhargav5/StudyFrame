@@ -4,6 +4,21 @@ from studyframe.requests import RequestError, prepare_request
 
 
 class PrepareRequestTests(unittest.TestCase):
+    def test_followup_contains_exact_last_exchange_and_current_material(self):
+        result = prepare_request("Why stop there?", "  print(3)", previous=("Why range(3)?", "Try 0, 1, 2."))
+        self.assertIn("Reference material:\n  print(3)", result)
+        self.assertIn("Previous question:\nWhy range(3)?", result)
+        self.assertIn("Previous AI answer:\nTry 0, 1, 2.", result)
+        self.assertIn("may contain mistakes", result)
+
+    def test_followup_rejects_malformed_or_oversized_exchange_without_truncation(self):
+        for previous in ((), ("question",), ["question", "answer"], ("", "answer"),
+                         ("q", None), ("q" * 4001, "answer"), ("q", "a" * 12001)):
+            with self.subTest(previous_type=type(previous)), self.assertRaises(RequestError):
+                prepare_request("Why?", previous=previous)
+        result = prepare_request("Why?", previous=("q" * 4000, "a" * 12000))
+        self.assertTrue(result.endswith("a" * 12000))
+
     def test_default_mode_asks_for_a_hint_before_a_solution(self):
         result = prepare_request("Why does this loop skip an item?")
         self.assertIn("Learning mode: hint", result)
