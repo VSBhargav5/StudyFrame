@@ -124,6 +124,26 @@ class WindowTests(unittest.TestCase):
         self.assertIsNone(self.window.attachment)
         self.assertEqual(self.path.read_bytes(), original)
 
+    def test_tabs_move_from_question_to_review_and_clear_returns_to_question(self):
+        self.assertEqual(self.window.tabs.currentIndex(), 0)
+        self.prepare()
+        self.assertEqual(self.window.tabs.currentIndex(), 1)
+        self.window.clear_session()
+        self.assertEqual(self.window.tabs.currentIndex(), 0)
+
+    def test_copy_answer_requires_a_current_completed_answer(self):
+        clipboard = Mock()
+        with patch("studyframe.app.QApplication.clipboard", return_value=clipboard):
+            self.window.copy_answer()
+            clipboard.setText.assert_not_called()
+            self.window.busy = True
+            self.window.receive_answer("Synthetic <b>plain text</b> answer")
+            self.assertEqual(self.window.tabs.currentIndex(), 2)
+            self.window.copy_answer()
+            clipboard.setText.assert_called_once_with("Synthetic <b>plain text</b> answer")
+            self.window.question.setPlainText("A different question")
+            self.assertFalse(self.window.copy_answer_button.isEnabled())
+
 
 if __name__ == "__main__":
     unittest.main()

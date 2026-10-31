@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
-    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox,
+    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QTabWidget,
 )
 
 from studyframe.images import ImageError, LoadedImage, load_image
@@ -43,6 +43,14 @@ class StudyWindow(QMainWindow):
         columns.addLayout(left, 1)
         columns.addLayout(right, 1)
         root.addLayout(columns, 1)
+        self.tabs = QTabWidget()
+        self.tabs.setAccessibleName("Study workflow")
+        right.addWidget(self.tabs)
+        question_page, review_page, answer_page = QWidget(), QWidget(), QWidget()
+        question_layout, review_layout, answer_layout = QVBoxLayout(question_page), QVBoxLayout(review_page), QVBoxLayout(answer_page)
+        self.tabs.addTab(question_page, "1. Question")
+        self.tabs.addTab(review_page, "2. Review & send")
+        self.tabs.addTab(answer_page, "3. Answer")
 
         left.addWidget(QLabel("1. Add what you are studying"))
         image_actions = QHBoxLayout()
@@ -68,59 +76,61 @@ class StudyWindow(QMainWindow):
         self.context.setPlaceholderText("Paste a small example or explain what you tried…")
         left.addWidget(self.context, 1)
 
-        right.addWidget(QLabel("2. Choose how to learn"))
+        question_layout.addWidget(QLabel("Choose how to learn"))
         self.mode = QComboBox()
         self.mode.setAccessibleName("Learning mode")
         for label, value in [("Give me a hint", "hint"), ("Explain the idea", "explain"), ("Help me debug", "debug")]:
             self.mode.addItem(label, value)
-        right.addWidget(self.mode)
-        right.addWidget(QLabel("Your question"))
+        question_layout.addWidget(self.mode)
+        question_layout.addWidget(QLabel("Your question"))
         self.question = QPlainTextEdit()
         self.question.setAccessibleName("Your question")
         self.question.setPlaceholderText("What would you like to understand?")
-        self.question.setMaximumHeight(115)
-        right.addWidget(self.question)
+        question_layout.addWidget(self.question, 1)
         self.prepare_button = QPushButton("Prepare request")
         self.prepare_button.setObjectName("primary")
-        right.addWidget(self.prepare_button)
+        question_layout.addWidget(self.prepare_button)
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
         self.preview.setAccessibleName("Prepared text request")
         self.preview.setPlaceholderText("Your prepared text will appear here. It is not an AI answer.")
-        right.addWidget(self.preview, 1)
+        review_layout.addWidget(self.preview, 1)
         copy_note = QLabel("Copy includes text only. The image preview is not interpreted or attached.")
         copy_note.setWordWrap(True)
-        right.addWidget(copy_note)
+        review_layout.addWidget(copy_note)
         actions = QHBoxLayout()
         self.copy_button = QPushButton("Copy text")
         self.copy_button.setEnabled(False)
         self.clear_button = QPushButton("Clear session")
         actions.addWidget(self.copy_button)
-        actions.addWidget(self.clear_button)
-        right.addLayout(actions)
-        right.addWidget(QLabel(f"3. Ask OpenAI · {MODEL} · api.openai.com"))
+        review_layout.addLayout(actions)
+        review_layout.addWidget(QLabel(f"OpenAI · {MODEL} · api.openai.com"))
         self.key = QLineEdit()
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         self.key.setPlaceholderText("Your OpenAI API key — this session only")
         self.key.setAccessibleName("OpenAI API key")
-        right.addWidget(self.key)
+        review_layout.addWidget(self.key)
         disclosure = QLabel("Send includes the entire selected file, including embedded metadata. "
                             "No chat history is sent. API charges apply; store=false is not a zero-retention guarantee.")
         disclosure.setWordWrap(True)
-        right.addWidget(disclosure)
+        review_layout.addWidget(disclosure)
         self.consent = QCheckBox("I reviewed the text and image for sending")
-        right.addWidget(self.consent)
+        review_layout.addWidget(self.consent)
         self.send_button = QPushButton("Send reviewed request")
         self.send_button.setEnabled(False)
         self.cancel_button = QPushButton("Cancel request")
         self.cancel_button.setEnabled(False)
-        right.addWidget(self.send_button)
-        right.addWidget(self.cancel_button)
+        review_layout.addWidget(self.send_button)
+        root.addWidget(self.cancel_button)
         self.answer = QPlainTextEdit()
         self.answer.setReadOnly(True)
         self.answer.setAccessibleName("AI study answer")
         self.answer.setPlaceholderText("AI answer — verify it with a small example. No code is executed.")
-        right.addWidget(self.answer, 1)
+        answer_layout.addWidget(self.answer, 1)
+        self.copy_answer_button = QPushButton("Copy answer")
+        self.copy_answer_button.setEnabled(False)
+        answer_layout.addWidget(self.copy_answer_button)
+        root.addWidget(self.clear_button)
         self.status = QLabel("Ready. Start with one question.")
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -146,6 +156,7 @@ class StudyWindow(QMainWindow):
         self.remove_button.clicked.connect(self.remove_image)
         self.prepare_button.clicked.connect(self.prepare)
         self.copy_button.clicked.connect(self.copy_text)
+        self.copy_answer_button.clicked.connect(self.copy_answer)
         self.clear_button.clicked.connect(self.clear_session)
         self.question.textChanged.connect(self.invalidate)
         self.context.textChanged.connect(self.invalidate)
@@ -188,6 +199,8 @@ class StudyWindow(QMainWindow):
         self.set_busy(False)
         self.consent.setChecked(False)
         self.answer.setPlainText(text)
+        self.copy_answer_button.setEnabled(True)
+        self.tabs.setCurrentIndex(2)
         self.status.setText("AI answer received. Check its reasoning with a small example before relying on it.")
 
     def receive_error(self, message):
@@ -213,6 +226,7 @@ class StudyWindow(QMainWindow):
             self.cancel_request()
         self.consent.setChecked(False)
         self.answer.clear()
+        self.copy_answer_button.setEnabled(False)
         self.preview.clear()
         self.copy_button.setEnabled(False)
         self.update_send()
@@ -269,6 +283,8 @@ class StudyWindow(QMainWindow):
             return
         self.preview.setPlainText(text)
         self.copy_button.setEnabled(True)
+        self.update_send()
+        self.tabs.setCurrentIndex(1)
         self.status.setText("Text request prepared locally. No AI answer or transmission has occurred.")
 
     def copy_text(self):
@@ -277,6 +293,11 @@ class StudyWindow(QMainWindow):
             QApplication.clipboard().setText(text)
             self.status.setText("Text copied. The clipboard may keep it after this session is cleared.")
 
+    def copy_answer(self):
+        if self.copy_answer_button.isEnabled():
+            QApplication.clipboard().setText(self.answer.toPlainText())
+            self.status.setText("AI answer copied. Verify it before relying on it; clipboard history may retain it.")
+
     def clear_session(self):
         self.cancel_request()
         self.key.clear()
@@ -284,6 +305,7 @@ class StudyWindow(QMainWindow):
         self.context.clear()
         self.mode.setCurrentIndex(0)
         self.remove_image()
+        self.tabs.setCurrentIndex(0)
         self.status.setText("Session cleared. Your original image file and clipboard are unchanged.")
 
 
