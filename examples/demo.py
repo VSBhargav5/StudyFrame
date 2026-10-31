@@ -10,14 +10,18 @@ import tempfile
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", type=Path, help="Render the synthetic app to a new PNG and exit")
+    views = parser.add_mutually_exclusive_group()
+    views.add_argument("--crop", action="store_true", help="Apply a code-only crop to the synthetic image")
+    views.add_argument("--crop-editor", action="store_true", help="Open the crop editor with the synthetic image")
     args = parser.parse_args()
     if args.snapshot:
         os.environ.setdefault("QT_QPA_PLATFORM", "windows" if sys.platform == "win32" else "offscreen")
 
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import Qt, QRect
     from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QDialog
     from studyframe.app import StudyWindow
+    from studyframe.crop import CropDialog
 
     app = QApplication([])
     if not QFontDatabase.families():
@@ -45,7 +49,20 @@ def main():
         window.show()
         app.processEvents()
         window.render_image()
+        if args.crop:
+            window.apply_crop(QRect(20, 100, 650, 110))
         window.prepare()
+        target = window
+        if args.crop_editor:
+            dialog = CropDialog(window.attachment.image, window)
+            if args.snapshot:
+                dialog.from_canvas(QRect(20, 100, 650, 110))
+                dialog.show()
+                app.processEvents()
+                target = dialog
+            elif dialog.exec() == QDialog.DialogCode.Accepted:
+                window.apply_crop(dialog.selected_rect())
+                window.prepare()
         if args.snapshot:
             args.snapshot.parent.mkdir(parents=True, exist_ok=True)
             # Reserve the destination without overwriting an existing artifact.
@@ -54,7 +71,7 @@ def main():
                 encoded = QByteArray()
                 buffer = QBuffer(encoded)
                 buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-                if not window.grab().save(buffer, "PNG"):
+                if not target.grab().save(buffer, "PNG"):
                     raise RuntimeError("Could not render synthetic window")
                 destination.write(bytes(encoded))
             window.close()
