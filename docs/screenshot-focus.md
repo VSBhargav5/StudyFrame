@@ -53,3 +53,14 @@ a previously installed wheel; reinstall that entry point after updates. The
 previous installed 0.1.0 copy was found to lack AI send/follow-up actions even
 though project source contained them. The local installed copy is refreshed
 as part of this release's verification. An installer is still not provided.
+
+## Qt runtime compatibility
+
+Linux Python 3.11 CI twice passed the widget assertions with Qt/PySide 6.12.0
+then aborted at interpreter shutdown with `none_dealloc`. Explicit test-widget
+disposal did not resolve it. This build pins PySide6 Essentials and Shiboken to
+6.11.3 while preserving Python 3.11 coverage. A separate-process raster-call
+regression also checks normal runtime exit. The failure is recorded in PR #4;
+the exact native root cause was not independently proved. The package publisher's
+[6.11.3 release](https://pypi.org/project/PySide6-Essentials/6.11.3/) is the source
+for the supported wheel. Keep all Windows/Linux CI lanes when changing this pin.

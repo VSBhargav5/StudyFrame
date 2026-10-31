@@ -1,7 +1,7 @@
 # Predict, ask, verify
 
 StudyFrame now has a deliberately initiated OpenAI text/image request path.
-Its 69 offline tests cover the existing image/request rules and the new transport
+Its 70 offline tests cover the existing image/request rules and the new transport
 and widget transitions. No paid request, personal screenshot transmission,
 account access, or answer-quality experiment was performed during implementation.
 
