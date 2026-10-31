@@ -2,6 +2,10 @@
 
 A personal Python desktop workspace for studying code and screenshots on Windows.
 
+**v0.2.0: screenshot focus.** Choose an image, drag around the relevant code or
+diagram, then review/send only that cropped image. Restore the original anytime.
+The window title and subtitle show the version so you can recognize this build.
+
 The first slice helps you organize a question: choose a saved screenshot, inspect
 it, add notes or code, and prepare a hint, explanation, or debugging request.
 You can then explicitly send the reviewed text and selected image to OpenAI for
@@ -17,6 +21,12 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m studyframe
 ```
+
+After setup, double-click **Launch-StudyFrame.cmd** in this folder. It opens the
+current project source using its own environment, including when launched from
+another directory. Close older StudyFrame windows before reopening this build.
+If you previously installed the desktop entry point, refresh that copy after
+updates with `.\.venv\Scripts\python.exe -m pip install --no-deps .`.
 
 No Node.js, Electron, local server, or database is required. An API key is needed
 only for live AI requests. Dependencies
@@ -34,6 +44,11 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
   Start a new question or change the notes/image to drop that previous exchange.
 
 - Choose one saved PNG/JPEG; inspect, replace, or remove its local preview.
+- **Crop / focus area:** drag a rectangle or use Left/Top/Width/Height pixel
+  controls. Use selected area replaces the attachment with a fresh PNG containing
+  those oriented pixels. Restore original uses the original byte snapshot;
+  the source file is never changed. Crop/restore require preparing and reviewing
+  again and reset follow-up context. Cancelling a crop preserves the prior state.
 - Image loading checks content, reads one bounded byte snapshot, handles JPEG
   orientation, and rejects unreadable or oversized images.
 - Prepare a text request in hint, explain, or debug mode. Pasted code retains its
@@ -61,7 +76,9 @@ For AI help: prepare your question, inspect the full text and image, enter your
 own OpenAI API key in the masked session field, check the review box, then click
 **Send reviewed request**. Never paste a key into an issue, chat, or repository.
 The app sends to `https://api.openai.com/v1/responses` using `gpt-4.1-mini`.
-The whole selected file, including embedded metadata, is sent. A follow-up also
+Without cropping, the whole original file, including embedded metadata, is sent.
+After cropping, a fresh PNG of only the selected pixels is sent; source metadata
+is not copied. Restoring the original restores its metadata too. A follow-up also
 includes the last question and answer, displayed in the prepared text; a new
 question has no previous exchange. API usage is billed. The key is not saved by the app and Clear
 session removes it from the field; this is not secure memory erasure.
@@ -86,7 +103,12 @@ exchanges and the key; it does not guarantee secure memory erasure.
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe -m examples.demo --snapshot out/demo.png
+.\.venv\Scripts\python.exe -m examples.demo --crop-editor
+.\.venv\Scripts\python.exe -m examples.demo --crop --snapshot out/cropped-demo.png
 ```
+
+The crop demo uses a synthetic code image. It performs no screen capture or model
+call. See [screenshot-focus exercise](docs/screenshot-focus.md).
 
 The tests exercise pure request rules, synthetic PNG/JPEG files, actual Qt widgets,
 and state transitions. The picker and clipboard are stubbed in automated widget

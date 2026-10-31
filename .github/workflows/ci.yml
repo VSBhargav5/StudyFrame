@@ -30,11 +30,19 @@ jobs:
           python -m pip install --only-binary=:all: -r requirements.txt
       - name: Install the application package
         run: python -m pip install --no-deps .
+      - name: Verify the installed build outside the source checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -c "from studyframe import __version__; from studyframe.app import StudyWindow; from studyframe.crop import CropDialog; assert __version__ == '0.2.0'; assert hasattr(StudyWindow, 'send_request'); assert hasattr(StudyWindow, 'start_followup'); assert hasattr(StudyWindow, 'choose_crop'); print('Installed StudyFrame', __version__)"
       - name: Test offline behavior and actual Qt widgets
         run: python -m unittest discover -s tests -v
       - name: Render a synthetic study session
         run: python -m examples.demo --snapshot out/demo.png
+      - name: Render crop editor and cropped study image
+        run: |
+          python -m examples.demo --crop-editor --snapshot out/crop-editor.png
+          python -m examples.demo --crop --snapshot out/cropped-study.png
       - uses: actions/upload-artifact@v4
         with:
           name: synthetic-study-${{ matrix.os }}-${{ matrix.python }}
-          path: out/demo.png
+          path: out/*.png

@@ -1,7 +1,7 @@
 # Predict, ask, verify
 
 StudyFrame now has a deliberately initiated OpenAI text/image request path.
-Its 58 offline tests cover the existing image/request rules and the new transport
+Its 70 offline tests cover the existing image/request rules and the new transport
 and widget transitions. No paid request, personal screenshot transmission,
 account access, or answer-quality experiment was performed during implementation.
 
@@ -11,7 +11,8 @@ account access, or answer-quality experiment was performed during implementation
   POST JSON with model, user input content, store=false and max_output_tokens.
 - [Image input guide](https://developers.openai.com/api/docs/guides/images-vision):
   input_image accepts a base64 data URL. The selected byte snapshot is encoded,
-  not reopened from disk. The complete PNG/JPEG and its metadata are transmitted.
+  not reopened from disk. Without cropping the complete PNG/JPEG and metadata
+  are transmitted; a crop uses a new selected-pixel PNG without source metadata.
 - [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini):
   supports image input and text output through Responses. Listed text rates at
   review were $0.40 per million input tokens and $1.60 per million output tokens;
@@ -35,6 +36,8 @@ errors. Mocks prove local behavior, not the remote API or model's correctness.
 There is no code execution. Prompt instructions are not a security boundary.
 
 ## One 60–90 minute practice session
+
+Latest focus exercise: [screenshot selection and exact attachment bytes](screenshot-focus.md).
 
 October 31 upgrade: use Question → Review & send → Answer tabs. After a completed
 answer, Ask a follow-up returns to Question. Only the immediately prior question

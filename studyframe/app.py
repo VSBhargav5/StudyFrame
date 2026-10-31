@@ -2,15 +2,17 @@
 
 import sys
 from pathlib import Path
+from studyframe import __version__
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
-    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QTabWidget,
+    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QTabWidget, QDialog,
 )
 
-from studyframe.images import ImageError, LoadedImage, load_image
+from studyframe.images import ImageError, LoadedImage, load_image, crop_image
+from studyframe.crop import CropDialog
 from studyframe.requests import RequestError, prepare_request
 from studyframe.provider import StudyProvider, payload, MODEL
 
@@ -24,7 +26,9 @@ class StudyWindow(QMainWindow):
         self.followup_context = None
         self.sent_question = ""
         self.attachment: LoadedImage | None = None
-        self.setWindowTitle("StudyFrame")
+        self.original_attachment = None
+        self.image_name = ""
+        self.setWindowTitle(f"StudyFrame {__version__}")
         self.resize(1100, 780)
         self.setMinimumSize(760, 620)
         body = QWidget()
@@ -34,7 +38,7 @@ class StudyWindow(QMainWindow):
         title = QLabel("StudyFrame")
         title.setObjectName("title")
         root.addWidget(title)
-        root.addWidget(QLabel("Make sense of the code and material in front of you."))
+        root.addWidget(QLabel(f"Screenshot focus · v{__version__} · Choose an image, crop the relevant area, then ask."))
         self.notice = QLabel(
             "Prepare locally, then choose whether to send to OpenAI. "
             "AI answers can be wrong: predict, ask, then verify."
@@ -63,6 +67,14 @@ class StudyWindow(QMainWindow):
         image_actions.addWidget(self.choose_button)
         image_actions.addWidget(self.remove_button)
         left.addLayout(image_actions)
+        crop_actions = QHBoxLayout()
+        self.crop_button = QPushButton("Crop / focus area…")
+        self.restore_button = QPushButton("Restore original")
+        self.crop_button.setEnabled(False)
+        self.restore_button.setEnabled(False)
+        crop_actions.addWidget(self.crop_button)
+        crop_actions.addWidget(self.restore_button)
+        left.addLayout(crop_actions)
         self.image_label = QLabel("Choose a saved PNG or JPEG. Nothing is captured automatically.")
         self.image_label.setWordWrap(True)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -118,7 +130,7 @@ class StudyWindow(QMainWindow):
         self.key.setPlaceholderText("Your OpenAI API key — this session only")
         self.key.setAccessibleName("OpenAI API key")
         review_layout.addWidget(self.key)
-        disclosure = QLabel("Send includes the entire selected file, including embedded metadata. "
+        disclosure = QLabel("Send uses the image preview: original file bytes, or the selected crop as a new PNG. "
                             "A follow-up includes the previous question and answer shown above. "
                             "API charges apply; store=false is not a zero-retention guarantee.")
         disclosure.setWordWrap(True)
@@ -168,6 +180,8 @@ class StudyWindow(QMainWindow):
         """)
         self.choose_button.clicked.connect(self.choose_image)
         self.remove_button.clicked.connect(self.remove_image)
+        self.crop_button.clicked.connect(self.choose_crop)
+        self.restore_button.clicked.connect(self.restore_image)
         self.prepare_button.clicked.connect(self.prepare)
         self.copy_button.clicked.connect(self.copy_text)
         self.copy_answer_button.clicked.connect(self.copy_answer)
@@ -221,6 +235,9 @@ class StudyWindow(QMainWindow):
                        self.prepare_button, self.key, self.consent):
             widget.setEnabled(not busy)
         self.remove_button.setEnabled(not busy and self.attachment is not None)
+        self.crop_button.setEnabled(not busy and self.attachment is not None)
+        self.restore_button.setEnabled(not busy and self.original_attachment is not None
+                                       and self.attachment is not self.original_attachment)
         self.cancel_button.setEnabled(busy)
         self.followup_button.setEnabled(not busy and self.last_exchange is not None)
         self.update_send()
@@ -299,11 +316,56 @@ class StudyWindow(QMainWindow):
             self.status.setText(f"{exc} Previous selection kept.")
             return
         self.attachment = selected
+        self.original_attachment = selected
+        self.image_name = Path(path).name
         self.material_changed()
-        self.image_info.setText(f"{Path(path).name} · {selected.width} × {selected.height} · Local preview")
+        self.update_image_info()
         self.remove_button.setEnabled(True)
+        self.crop_button.setEnabled(True)
+        self.restore_button.setEnabled(False)
         self.render_image()
         self.status.setText("Image selected locally. No text extraction or AI analysis has run.")
+
+    def update_image_info(self):
+        if self.attachment is None:
+            self.image_info.setText("No image selected")
+            return
+        image = self.attachment
+        kind = "Original" if image is self.original_attachment else "Cropped PNG"
+        self.image_info.setText(f"{self.image_name} · {kind} · {image.width} × {image.height} · "
+                                f"{len(image.data):,} bytes · SHA256 {image.sha256[:12]}…")
+
+    def choose_crop(self):
+        if self.attachment is None or self.busy:
+            return
+        dialog = CropDialog(self.attachment.image, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.apply_crop(dialog.selected_rect())
+
+    def apply_crop(self, rect):
+        if self.attachment is None or self.busy:
+            return
+        try:
+            cropped = crop_image(self.attachment, rect.x(), rect.y(), rect.width(), rect.height())
+        except ImageError as exc:
+            self.status.setText(str(exc))
+            return
+        self.attachment = cropped
+        self.material_changed()
+        self.update_image_info()
+        self.restore_button.setEnabled(True)
+        self.render_image()
+        self.status.setText("Crop applied locally. Only these pixels will be sent after a new review. Original file unchanged.")
+
+    def restore_image(self):
+        if self.original_attachment is None or self.busy:
+            return
+        self.attachment = self.original_attachment
+        self.material_changed()
+        self.update_image_info()
+        self.restore_button.setEnabled(False)
+        self.render_image()
+        self.status.setText("Original byte snapshot restored, including original metadata. Prepare and review again before sending.")
 
     def render_image(self):
         if self.attachment is not None:
@@ -320,10 +382,14 @@ class StudyWindow(QMainWindow):
 
     def remove_image(self):
         self.attachment = None
+        self.original_attachment = None
+        self.image_name = ""
         self.image_label.clear()
         self.image_label.setText("Choose a saved PNG or JPEG. Nothing is captured automatically.")
         self.image_info.setText("No image selected")
         self.remove_button.setEnabled(False)
+        self.crop_button.setEnabled(False)
+        self.restore_button.setEnabled(False)
         self.material_changed()
 
     def prepare(self):

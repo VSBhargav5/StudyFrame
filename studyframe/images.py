@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 import stat
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-from PySide6.QtGui import QImage, QImageReader
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRect
+from PySide6.QtGui import QImage, QImageReader, QPainter
 
 
 MAX_FILE_BYTES = 8 * 1024 * 1024
@@ -28,6 +28,35 @@ class LoadedImage:
     width: int
     height: int
     format: str
+
+
+def crop_image(source: LoadedImage, x: int, y: int, width: int, height: int) -> LoadedImage:
+    """Create a new PNG from selected oriented pixels, without source metadata.
+
+    Coordinates are in the decoded preview's pixels; right/bottom are exclusive.
+    The original snapshot and source file are never modified or reopened.
+    """
+    if (any(type(value) is not int for value in (x, y, width, height))
+            or x < 0 or y < 0 or width < 1 or height < 1
+            or x + width > source.width or y + height > source.height):
+        raise ImageError("Choose a nonempty crop inside the image.")
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    if image.isNull():
+        raise ImageError("There was not enough memory to crop this image.")
+    image.fill(0)
+    painter = QPainter(image)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+    painter.drawImage(QRect(0, 0, width, height), source.image, QRect(x, y, width, height))
+    painter.end()
+    encoded = QByteArray()
+    buffer = QBuffer(encoded)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    if not image.save(buffer, "PNG"):
+        raise ImageError("The crop could not be encoded. Previous image kept.")
+    data = bytes(encoded)
+    if len(data) > MAX_FILE_BYTES:
+        raise ImageError("The cropped PNG exceeds 8 MiB. Choose a smaller area.")
+    return LoadedImage(data, image, hashlib.sha256(data).hexdigest(), width, height, "png")
 
 
 def load_image(path: str | Path) -> LoadedImage:
