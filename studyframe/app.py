@@ -353,6 +353,7 @@ class StudyWindow(QMainWindow):
 
     def clear_session(self):
         self.cancel_request()
+        self.sent_question = ""
         self.key.clear()
         self.question.clear()
         self.context.clear()

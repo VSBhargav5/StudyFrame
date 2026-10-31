@@ -249,6 +249,7 @@ class ProviderTests(unittest.TestCase):
         window.clear_session()
         self.assertIsNone(window.followup_context)
         self.assertIsNone(window.last_exchange)
+        self.assertEqual(window.sent_question, "")
         self.assertFalse(window.followup_button.isEnabled())
 
     def test_overlong_answer_is_preserved_but_cannot_start_followup(self):
