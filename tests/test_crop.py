@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPoint, QRect, Qt
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QRect, Qt
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox
@@ -40,7 +40,12 @@ class CropTests(unittest.TestCase):
     def show(self, widget):
         widget.show()
         self.app.processEvents()
-        self.addCleanup(widget.close)
+        def dispose():
+            widget.close()
+            widget.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            self.app.processEvents()
+        self.addCleanup(dispose)
         return widget
 
     def test_crop_encodes_only_selected_oriented_pixels_without_source_metadata(self):
