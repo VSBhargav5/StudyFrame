@@ -33,7 +33,7 @@ jobs:
       - name: Verify the installed build outside the source checkout
         working-directory: ${{ runner.temp }}
         run: |
-          python -c "from studyframe import __version__; from studyframe.app import StudyWindow; from studyframe.crop import CropDialog; assert __version__ == '0.3.0'; assert hasattr(StudyWindow, 'send_request'); assert hasattr(StudyWindow, 'start_followup'); assert hasattr(StudyWindow, 'choose_crop'); assert hasattr(StudyWindow, 'choose_screen'); from studyframe.capture import capture_screen; from studyframe.provider import provider_config; assert provider_config('openrouter_free')['model'] == 'openrouter/free'; print('Installed StudyFrame', __version__)"
+          python -c "from studyframe import __version__; from studyframe.app import StudyWindow; from studyframe.crop import CropDialog; assert __version__ == '0.4.0'; assert hasattr(StudyWindow, 'send_request'); assert hasattr(StudyWindow, 'start_followup'); assert hasattr(StudyWindow, 'choose_crop'); assert hasattr(StudyWindow, 'choose_screen'); assert hasattr(StudyWindow, 'capture_and_ask'); from studyframe.capture import capture_screen; from studyframe.provider import provider_config; assert provider_config('openrouter_free')['model'] == 'openrouter/free'; print('Installed StudyFrame', __version__)"
       - name: Test offline behavior and actual Qt widgets
         run: python -m unittest discover -s tests -v
       - name: Render a synthetic study session
@@ -42,6 +42,10 @@ jobs:
         run: |
           python -m examples.demo --crop-editor --snapshot out/crop-editor.png
           python -m examples.demo --crop --snapshot out/cropped-study.png
+      - name: Render glass overlay and compact bar
+        run: |
+          python -m examples.demo --overlay-answer --snapshot out/glass-answer.png
+          python -m examples.demo --collapsed --snapshot out/glass-collapsed.png
       - uses: actions/upload-artifact@v4
         with:
           name: synthetic-study-${{ matrix.os }}-${{ matrix.python }}

@@ -13,6 +13,8 @@ def main():
     views = parser.add_mutually_exclusive_group()
     views.add_argument("--crop", action="store_true", help="Apply a code-only crop to the synthetic image")
     views.add_argument("--crop-editor", action="store_true", help="Open the crop editor with the synthetic image")
+    views.add_argument('--overlay-answer',action='store_true',help='Show a labelled offline example answer in the glass overlay')
+    views.add_argument('--collapsed',action='store_true',help='Show the compact glass bar without capturing or sending')
     args = parser.parse_args()
     if args.snapshot:
         os.environ.setdefault("QT_QPA_PLATFORM", "windows" if sys.platform == "win32" else "offscreen")
@@ -52,6 +54,12 @@ def main():
         if args.crop:
             window.apply_crop(QRect(20, 100, 650, 110))
         window.prepare()
+        if args.overlay_answer:
+            window.sent_question = window.question.toPlainText()
+            window.provider.model_used = 'offline-demo'
+            window.set_busy(True)
+            window.receive_answer('range(3) produces 0, 1 and 2. The stop value is excluded.\n\nTo include 3, use range(4).\n\nSynthetic example - no model was called.')
+        if args.collapsed:window.collapse_button.setChecked(True)
         target = window
         if args.crop_editor:
             dialog = CropDialog(window.attachment.image, window)

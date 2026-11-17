@@ -2,18 +2,24 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.3.0: capture, ask, refresh.** Choose a display, capture a local still, crop
-what matters, and ask a vision model about the pixels you reviewed. Keep the
-assistant above other windows when useful. OpenRouter's free-model route is the
-default; OpenAI remains an explicitly labelled paid option. This restores the
-Cue-like screen-assistance direction instead of requiring saved-image preparation.
+**v0.4.0: glass desktop companion.** A compact, draggable translucent overlay
+with a question field, one Capture & ask button and an answer panel. Connect your
+model once in the connection drawer. Clicking Capture & ask explicitly captures
+the selected display and sends those fresh pixels plus your question; an empty
+question asks for a screen explanation. No mandatory tabs, notes or per-frame
+checkbox in that direct flow. Collapse to a small bar without losing the answer.
 
-This version uses deliberate still captures, not continuous video watching. It
-does not capture on startup or send a frame automatically. Real display capture,
-free-account availability and live model quality still need a user trial;85offline
-tests use synthetic pixels and mocked replies. RoleWeave is paused while StudyFrame
-is the active portfolio implementation. CueDesk remains a separate historical
-reference, not a second app being developed in parallel.
+Preview and crop remain available for a local-only capture and an explicitly
+reviewed send. OpenRouter free routing is the default; paid OpenAI stays separately
+labelled. This is visible desktop assistance: no screen-recording exclusion,
+process concealment or monitoring bypass. The surface is translucent/gradient
+painted; native background blur is not claimed. Keep/crop sensitive material out
+before using the direct action.
+
+This version captures still images on your click, not continuous video.98offline
+tests use synthetic pixels/mocked replies; real OS/compositor/scaling behavior,
+free-account routing and live quality still require a trial. RoleWeave remains
+paused. [Overlay workflow and controls](docs/glass-overlay.md).
 
 ## Run on Windows
 
@@ -38,17 +44,20 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
 
 ## What works
 
-- **Capture screen:** choose one connected display. StudyFrame briefly hides,
-  then captures one still PNG locally. No source thumbnail capture or network call
-  happens while listing displays. A timestamp identifies the capture; click again
-  for new pixels. Ctrl+Shift+S is an app-focused shortcut, not a global hotkey.
+- **Capture & ask:** the selected display is visible in the selector. Click, or
+  use Ctrl+Enter while the app is focused, to capture and send one fresh still.
+  A failed capture never sends an older image. No key opens settings without
+  capturing. The app briefly hides for capture and restores for the answer.
+- **Preview / crop:** Capture for preview only uses a display picker and sends
+  nothing. Load, crop, prepare and explicitly approve/send when you want inspection
+  first. Source listing takes metadata only; timestamps identify captured stills.
 - **Keep on top:** visible always-on-top window, not concealment from sharing tools.
 - **Provider choice:** free OpenRouter route or paid OpenAI. Switching clears the
   key, prepared request, approval and follow-up context. Keys stay session-only.
 
-- Question, Review & send, and Answer tabs keep each step in its own workspace.
-  Preparing opens the review; a completed answer opens the answer tab. Cancel
-  and Clear session stay available below the workspace. Copy answer is explicit.
+- One glass-style window keeps the question, Capture & ask and answer together.
+  Drag the title, resize at the lower-right grip, collapse to a bar, or open the
+  settings/preview drawers. Copy answer, Follow up, Cancel and Clear stay explicit.
 - Ask a follow-up carries only the last question and AI answer into the next
   prepared text. Type a new question, review the complete combined request and
   consent again. The current notes/image are sent again; older turns are omitted.
@@ -69,7 +78,8 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
 - Clear session drops the app's references to the text/image; the original file
   and system clipboard are unchanged. This is not secure memory erasure.
 
-Nothing is automatically uploaded, persisted as history, or executed.
+No background uploads, persistent history or code execution. Capture & ask sends
+one fresh frame only when you deliberately invoke it; preview-only captures do not.
 There is no continuous capture, audio capture, local OCR, telemetry, or model SDK.
 The file picker and OS clipboard are operating-system facilities; OS/cloud
 clipboard history is outside StudyFrame's control.
@@ -83,9 +93,11 @@ Large supported images decode synchronously; UI responsiveness is not benchmarke
 
 ## Verify and learn
 
-For AI help: capture a screen or load an image, review the text and pixels, enter
-your own selected-provider key in the masked session field, check the review box
-and click **Send reviewed request**. Do not put credentials in chat or Git.
+For AI help, open the connection drawer (ellipsis), choose a provider and enter
+your session key. Select the display and click **Capture & ask**; this is the
+explicit authorization to send that fresh screenshot and question. For review
+first, use **Preview**, prepare the request, approve its text/image and
+**Send reviewed capture**. Never put credentials in chat or Git.
 
 - Default: `https://openrouter.ai/api/v1/responses`, model `openrouter/free`.
   The server chooses an eligible free model, including image capability for images.
@@ -99,7 +111,8 @@ and click **Send reviewed request**. Do not put credentials in chat or Git.
 A display capture is a fresh pixel-only PNG. A loaded original file includes its
 original metadata until cropped. A crop sends a fresh PNG of selected pixels.
 A follow-up includes only the displayed previous question and answer, alongside
-the current image/notes. Capture/replace/crop changes reset that old exchange.
+the current image/notes. Manual capture/replace/crop changes reset that old exchange. A deliberately chosen
+Follow up can carry the last exchange with a new one-click capture.
 The app does not save the key; Clear session removes it, without secure-erasure
 or clipboard-history guarantees. [Free API options and official key links](docs/free-vision-options.md).
 
