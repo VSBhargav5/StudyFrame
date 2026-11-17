@@ -1,20 +1,22 @@
-"""Local study workspace. Selecting an image never starts capture or inference."""
+"""Local study workspace. Explicit display capture and reviewed vision help; no background watching."""
 
 import sys
 from pathlib import Path
+from datetime import datetime
 from studyframe import __version__
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
-    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QTabWidget, QDialog,
+    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QTabWidget, QDialog, QInputDialog,
 )
 
 from studyframe.images import ImageError, LoadedImage, load_image, crop_image
 from studyframe.crop import CropDialog
 from studyframe.requests import RequestError, prepare_request
-from studyframe.provider import StudyProvider, payload, MODEL
+from studyframe.provider import StudyProvider, payload, PROVIDERS, provider_config
+from studyframe.capture import capture_screen
 
 
 class StudyWindow(QMainWindow):
@@ -22,6 +24,10 @@ class StudyWindow(QMainWindow):
         super().__init__()
         self.provider = provider or StudyProvider(self)
         self.busy = False
+        self.pending_screen = None
+        self.capture_timer = QTimer(self)
+        self.capture_timer.setSingleShot(True)
+        self.capture_timer.timeout.connect(self.complete_capture)
         self.last_exchange = None
         self.followup_context = None
         self.sent_question = ""
@@ -38,9 +44,9 @@ class StudyWindow(QMainWindow):
         title = QLabel("StudyFrame")
         title.setObjectName("title")
         root.addWidget(title)
-        root.addWidget(QLabel(f"Screenshot focus · v{__version__} · Choose an image, crop the relevant area, then ask."))
+        root.addWidget(QLabel(f"Screen assistant · v{__version__} · Capture your screen, ask a question, inspect the answer."))
         self.notice = QLabel(
-            "Prepare locally, then choose whether to send to OpenAI. "
+            "Capture and review locally; send only when you choose. "
             "AI answers can be wrong: predict, ask, then verify."
         )
         self.notice.setWordWrap(True)
@@ -60,8 +66,15 @@ class StudyWindow(QMainWindow):
         self.tabs.addTab(answer_page, "3. Answer")
 
         left.addWidget(QLabel("1. Add what you are studying"))
+        screen_actions = QHBoxLayout()
+        self.capture_button = QPushButton('Capture screen…')
+        self.capture_button.setShortcut('Ctrl+Shift+S')
+        self.pin = QCheckBox('Keep on top')
+        screen_actions.addWidget(self.capture_button)
+        screen_actions.addWidget(self.pin)
+        left.addLayout(screen_actions)
         image_actions = QHBoxLayout()
-        self.choose_button = QPushButton("Choose screenshot…")
+        self.choose_button = QPushButton("Load saved image…")
         self.remove_button = QPushButton("Remove image")
         self.remove_button.setEnabled(False)
         image_actions.addWidget(self.choose_button)
@@ -75,7 +88,7 @@ class StudyWindow(QMainWindow):
         crop_actions.addWidget(self.crop_button)
         crop_actions.addWidget(self.restore_button)
         left.addLayout(crop_actions)
-        self.image_label = QLabel("Choose a saved PNG or JPEG. Nothing is captured automatically.")
+        self.image_label = QLabel("Capture a display or load a saved image. No background watching.")
         self.image_label.setWordWrap(True)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setMinimumSize(300, 190)
@@ -91,10 +104,10 @@ class StudyWindow(QMainWindow):
         self.context.setPlaceholderText("Paste a small example or explain what you tried…")
         left.addWidget(self.context, 1)
 
-        question_layout.addWidget(QLabel("Choose how to learn"))
+        question_layout.addWidget(QLabel("Answer style"))
         self.mode = QComboBox()
         self.mode.setAccessibleName("Learning mode")
-        for label, value in [("Give me a hint", "hint"), ("Explain the idea", "explain"), ("Help me debug", "debug")]:
+        for label, value in [("Explain the screen", "explain"), ("Give me a hint", "hint"), ("Help me debug", "debug")]:
             self.mode.addItem(label, value)
         question_layout.addWidget(self.mode)
         question_layout.addWidget(QLabel("Your question"))
@@ -107,7 +120,7 @@ class StudyWindow(QMainWindow):
         question_layout.addWidget(self.followup_note)
         self.new_topic_button = QPushButton("Start a new question")
         question_layout.addWidget(self.new_topic_button)
-        self.prepare_button = QPushButton("Prepare request")
+        self.prepare_button = QPushButton("Review screen & question")
         self.prepare_button.setObjectName("primary")
         question_layout.addWidget(self.prepare_button)
         self.preview = QPlainTextEdit()
@@ -115,7 +128,7 @@ class StudyWindow(QMainWindow):
         self.preview.setAccessibleName("Prepared text request")
         self.preview.setPlaceholderText("Your prepared text will appear here. It is not an AI answer.")
         review_layout.addWidget(self.preview, 1)
-        copy_note = QLabel("Copy includes text only. The image preview is not interpreted or attached.")
+        copy_note = QLabel("Copy text copies the written request only. Send reviewed request includes the image shown at left.")
         copy_note.setWordWrap(True)
         review_layout.addWidget(copy_note)
         actions = QHBoxLayout()
@@ -124,17 +137,25 @@ class StudyWindow(QMainWindow):
         self.clear_button = QPushButton("Clear session")
         actions.addWidget(self.copy_button)
         review_layout.addLayout(actions)
-        review_layout.addWidget(QLabel(f"OpenAI · {MODEL} · api.openai.com"))
+        self.provider_choice = QComboBox()
+        self.provider_choice.setAccessibleName('AI provider')
+        for identifier in ('openrouter_free','openai'):
+            self.provider_choice.addItem(PROVIDERS[identifier]['label'],identifier)
+        review_layout.addWidget(self.provider_choice)
+        self.connection_info = QLabel()
+        self.connection_info.setWordWrap(True)
+        self.connection_info.setTextFormat(Qt.TextFormat.PlainText)
+        review_layout.addWidget(self.connection_info)
         self.key = QLineEdit()
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         self.key.setPlaceholderText("Your OpenAI API key — this session only")
         self.key.setAccessibleName("OpenAI API key")
         review_layout.addWidget(self.key)
-        disclosure = QLabel("Send uses the image preview: original file bytes, or the selected crop as a new PNG. "
+        self.disclosure = QLabel("Send uses the image preview: original file bytes, or the selected crop as a new PNG. "
                             "A follow-up includes the previous question and answer shown above. "
                             "API charges apply; store=false is not a zero-retention guarantee.")
-        disclosure.setWordWrap(True)
-        review_layout.addWidget(disclosure)
+        self.disclosure.setWordWrap(True)
+        review_layout.addWidget(self.disclosure)
         self.consent = QCheckBox("I reviewed the text and image for sending")
         review_layout.addWidget(self.consent)
         self.send_button = QPushButton("Send reviewed request")
@@ -166,18 +187,23 @@ class StudyWindow(QMainWindow):
         scroll.setWidget(body)
         self.setCentralWidget(scroll)
         self.setStyleSheet("""
-            QMainWindow, QWidget { background: #f4f6f9; color: #183047; }
+            QMainWindow, QWidget { background: #11151e; color: #e4ecf7; }
             QLabel#title { font-size: 26px; font-weight: 700; }
             QLabel { font-size: 13px; }
-            QPlainTextEdit, QComboBox { background: white; border: 1px solid #a9b8c7;
+            QPlainTextEdit, QComboBox, QLineEdit { background: #1b2230; border: 1px solid #34435a;
                 border-radius: 6px; padding: 8px; font-size: 14px; }
-            QPushButton { background: #e3eaf1; border: 1px solid #9bacbc;
+            QPushButton { background: #253249; border: 1px solid #425574;
                 border-radius: 6px; padding: 9px; font-size: 13px; }
-            QPushButton#primary { background: #165a86; color: white; }
-            QPushButton:disabled { background: #e7ebef; color: #6f7e8b; }
+            QCheckBox::indicator { width: 15px; height: 15px; border: 1px solid #8c9db7; border-radius: 3px; background: #1b2230; }
+            QCheckBox::indicator:checked { background: #66dfc6; border: 2px solid #cafff6; }
+            QPushButton#primary { background: #66dfc6; color: #0b2224; }
+            QPushButton:disabled { background: #1a202d; color: #7b899e; }
             QPushButton:focus, QPlainTextEdit:focus, QComboBox:focus { border: 2px solid #2579ad; }
-            QLabel#imagePreview { background: #e7edf3; border: 1px dashed #91a7ba; padding: 8px; }
+            QLabel#imagePreview { background: #171e2b; border: 1px dashed #536d91; padding: 8px; }
         """)
+        self.capture_button.clicked.connect(self.choose_screen)
+        self.pin.toggled.connect(self.pin_window)
+        self.provider_choice.currentIndexChanged.connect(self.provider_changed)
         self.choose_button.clicked.connect(self.choose_image)
         self.remove_button.clicked.connect(self.remove_image)
         self.crop_button.clicked.connect(self.choose_crop)
@@ -197,6 +223,75 @@ class StudyWindow(QMainWindow):
         self.provider.failed.connect(self.receive_error)
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
+        self.provider_changed()
+        self.status.setText('Ready. Capture a screen or ask a text question.')
+
+    def provider_changed(self):
+        self.key.clear()
+        config = provider_config(self.provider_choice.currentData())
+        self.key.setPlaceholderText(config['label']+' key - session only')
+        self.key.setAccessibleName(config['label']+' API key')
+        self.connection_info.setText(config['model']+' · '+config['endpoint'])
+        self.disclosure.setText(
+            'OpenRouter and a selected upstream model receive the reviewed text/image. '
+            'Only the free router is allowed, with zero-price caps and no paid fallback. '
+            'Providers disallowing data collection are requested; this is not a zero-retention guarantee. '
+            'Availability and limits vary. A follow-up includes the displayed previous exchange.'
+            if self.provider_choice.currentData() == 'openrouter_free' else
+            'OpenAI receives the reviewed text/image, including a displayed previous exchange for follow-ups. '
+            'This route is paid. store=false is not a zero-retention guarantee.')
+        self.material_changed()
+
+    def pin_window(self, checked):
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, checked)
+        if self.pending_screen is None:self.show()
+
+    def choose_screen(self):
+        if self.busy:return
+        screens = QApplication.screens()
+        if not screens:
+            self.status.setText('No display is available for capture.')
+            return
+        try:
+            labels = [f'{i+1} · {screen.name()} · {screen.geometry().width()} × {screen.geometry().height()} logical pixels'
+                      for i,screen in enumerate(screens)]
+        except RuntimeError:
+            self.status.setText('Displays changed. Choose a screen again.')
+            return
+        choice,accepted = QInputDialog.getItem(self,'Capture one display','Choose a display. The app briefly hides; capture stays local.',labels,0,False)
+        if not accepted or choice not in labels:return
+        self.pending_screen = screens[labels.index(choice)]
+        self.set_busy(True)
+        self.cancel_button.setText('Cancel capture')
+        self.status.setText('Capturing one selected display locally. Nothing is sent.')
+        self.hide()
+        self.capture_timer.start(350)
+
+    def complete_capture(self):
+        screen = self.pending_screen
+        if screen is None:return
+        self.pending_screen = None
+        self.capture_timer.stop()
+        try:
+            selected = capture_screen(screen)
+        except ImageError as exc:
+            self.status.setText(str(exc)+' Previous selection kept.')
+            self.consent.setChecked(False)
+        else:
+            self.set_busy(False)
+            self.attachment = selected
+            self.original_attachment = selected
+            self.image_name = 'Display capture '+datetime.now().astimezone().isoformat(timespec='seconds')
+            self.material_changed()
+            self.update_image_info()
+            self.render_image()
+            if not self.question.toPlainText().strip():self.question.setPlainText('Explain what is on this screen.')
+            self.tabs.setCurrentIndex(0)
+            self.status.setText('One screen snapshot captured locally. Crop if needed, then review and send. Capture again for updated pixels.')
+        finally:
+            self.set_busy(False)
+            self.show()
+            self.cancel_button.setText('Cancel request')
 
     def material_changed(self):
         self.followup_context = None
@@ -232,7 +327,7 @@ class StudyWindow(QMainWindow):
     def set_busy(self, busy):
         self.busy = busy
         for widget in (self.question, self.context, self.mode, self.choose_button,
-                       self.prepare_button, self.key, self.consent):
+                       self.prepare_button, self.key, self.consent, self.capture_button, self.provider_choice, self.pin):
             widget.setEnabled(not busy)
         self.remove_button.setEnabled(not busy and self.attachment is not None)
         self.crop_button.setEnabled(not busy and self.attachment is not None)
@@ -245,14 +340,14 @@ class StudyWindow(QMainWindow):
     def send_request(self):
         if not self.send_button.isEnabled():
             return
-        body = payload(self.preview.toPlainText(), self.attachment)
+        body = payload(self.preview.toPlainText(), self.attachment,self.provider_choice.currentData())
         self.answer.clear()
         self.copy_answer_button.setEnabled(False)
         self.sent_question = self.question.toPlainText().strip()
         self.set_busy(True)
-        self.status.setText("Waiting for OpenAI. You can cancel; submitted requests may still be billed.")
+        self.status.setText("Waiting for "+PROVIDERS[self.provider_choice.currentData()]["label"]+". You can cancel locally.")
         try:
-            self.provider.send(body, self.key.text())
+            self.provider.send(body, self.key.text(),self.provider_choice.currentData())
         except ValueError as exc:
             self.receive_error(str(exc))
 
@@ -268,7 +363,7 @@ class StudyWindow(QMainWindow):
         self.followup_button.setEnabled(True)
         self.copy_answer_button.setEnabled(True)
         self.tabs.setCurrentIndex(2)
-        self.status.setText("AI answer received. Check its reasoning with a small example before relying on it.")
+        self.status.setText("AI answer received. Model: "+(getattr(self.provider,"model_used","") or "not reported")+". Verify its reasoning with a small example.")
 
     def receive_error(self, message):
         if not self.busy:
@@ -278,12 +373,19 @@ class StudyWindow(QMainWindow):
         self.status.setText(message)
 
     def cancel_request(self):
+        if self.pending_screen is not None:
+            self.capture_timer.stop()
+            self.pending_screen = None
+            self.show()
+            self.cancel_button.setText('Cancel request')
         self.provider.cancel()
         self.set_busy(False)
         self.consent.setChecked(False)
-        self.status.setText("Cancelled locally. OpenAI may still process and bill what was already sent.")
+        self.status.setText("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
 
     def closeEvent(self, event):
+        self.capture_timer.stop()
+        self.pending_screen = None
         self.provider.cancel()
         self.key.clear()
         super().closeEvent(event)
@@ -385,7 +487,7 @@ class StudyWindow(QMainWindow):
         self.original_attachment = None
         self.image_name = ""
         self.image_label.clear()
-        self.image_label.setText("Choose a saved PNG or JPEG. Nothing is captured automatically.")
+        self.image_label.setText("Capture a display or load a saved image. No background watching.")
         self.image_info.setText("No image selected")
         self.remove_button.setEnabled(False)
         self.crop_button.setEnabled(False)

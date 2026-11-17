@@ -1,4 +1,4 @@
-"""One explicit, asynchronous OpenAI request. No retries or history."""
+"""One explicit fixed-host Responses request. No app retries or paid fallback."""
 
 import base64
 import json
@@ -9,16 +9,32 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 ENDPOINT = "https://api.openai.com/v1/responses"
 MODEL = "gpt-4.1-mini"
 MAX_RESPONSE = 1024 * 1024
+PROVIDERS = {
+    'openai': {'label':'OpenAI (paid)', 'endpoint':ENDPOINT, 'model':MODEL},
+    'openrouter_free': {'label':'OpenRouter (free models)',
+                        'endpoint':'https://openrouter.ai/api/v1/responses', 'model':'openrouter/free'},
+}
+FREE_POLICY = {'max_price':{'prompt':0,'completion':0,'request':0,'image':0},
+               'allow_fallbacks':False, 'data_collection':'deny'}
 
 
-def payload(text, attachment=None):
+def provider_config(identifier):
+    if not isinstance(identifier,str) or identifier not in PROVIDERS:
+        raise ValueError('Choose a supported AI provider.')
+    return PROVIDERS[identifier]
+
+
+def payload(text, attachment=None, provider="openai"):
+    config = provider_config(provider)
     content = [{"type": "input_text", "text": text}]
     if attachment is not None:
         encoded = base64.b64encode(attachment.data).decode("ascii")
         content.append({"type": "input_image", "detail": "auto",
                         "image_url": f"data:image/{attachment.format};base64,{encoded}"})
-    return json.dumps({"model": MODEL, "input": [{"role": "user", "content": content}],
-                       "store": False, "max_output_tokens": 1500}).encode("utf-8")
+    body = {"model": config['model'], "input": [{"role": "user", "content": content}],
+            "store": False, "max_output_tokens": 1500}
+    if provider == 'openrouter_free':body['provider'] = FREE_POLICY
+    return json.dumps(body).encode('utf-8')
 
 
 def answer_from_response(data):
@@ -50,17 +66,28 @@ class StudyProvider(QObject):
         super().__init__(parent)
         self.manager = manager or QNetworkAccessManager(self)
         self.reply = None
+        self.model_used = ""
         self.buffer = bytearray()
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.timeout)
 
-    def send(self, body, key):
+    def send(self, body, key, provider="openai"):
+        config = provider_config(provider)
         if self.reply is not None:
             raise ValueError("A request is already running.")
         if not key or not key.isascii() or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in key):
             raise ValueError("Enter a valid API key in the session key field.")
-        request = QNetworkRequest(QUrl(ENDPOINT))
+        if provider == 'openrouter_free':
+            try:record = json.loads(body)
+            except (ValueError,TypeError):raise ValueError('Prepare the free-model request again.') from None
+            if (not isinstance(record,dict) or set(record) != {'model','input','store','max_output_tokens','provider'}
+                    or record.get('model') != 'openrouter/free' or record.get('provider') != FREE_POLICY
+                    or record.get('store') is not False or type(record.get('max_output_tokens')) is not int
+                    or record['max_output_tokens'] != 1500):
+                raise ValueError('The free route requires its fixed model and zero-price policy.')
+        self.model_used = ''
+        request = QNetworkRequest(QUrl(config['endpoint']))
         request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
                              QNetworkRequest.RedirectPolicy.ManualRedirectPolicy)
         request.setRawHeader(b"Content-Type", b"application/json")
@@ -94,7 +121,8 @@ class StudyProvider(QObject):
         data = bytes(self.buffer)
         self.buffer.clear()
         reply.deleteLater()
-        messages = {401: "API key rejected. Check the key and project permissions.",
+        messages = {402: "Account or credit access restricted. No paid fallback was attempted.",
+                    401: "API key rejected. Check the key and project permissions.",
                     403: "This project cannot use the selected model.",
                     429: "Rate or billing limit reached. Check your API account before retrying."}
         if status != 200 or error != QNetworkReply.NetworkError.NoError:
@@ -105,6 +133,8 @@ class StudyProvider(QObject):
         except ValueError as exc:
             self.failed.emit(str(exc))
         else:
+            model = json.loads(data).get('model','')
+            self.model_used = model if isinstance(model,str) and len(model) <= 200 and all(32 <= ord(c) < 127 for c in model) else ''
             self.succeeded.emit(answer)
 
     def cancel(self):
