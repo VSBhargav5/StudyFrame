@@ -1,16 +1,19 @@
 # StudyFrame
 
-A personal Python desktop workspace for studying code and screenshots on Windows.
+A personal Windows screen assistant, built in original Python source.
 
-**v0.2.0: screenshot focus.** Choose an image, drag around the relevant code or
-diagram, then review/send only that cropped image. Restore the original anytime.
-The window title and subtitle show the version so you can recognize this build.
+**v0.3.0: capture, ask, refresh.** Choose a display, capture a local still, crop
+what matters, and ask a vision model about the pixels you reviewed. Keep the
+assistant above other windows when useful. OpenRouter's free-model route is the
+default; OpenAI remains an explicitly labelled paid option. This restores the
+Cue-like screen-assistance direction instead of requiring saved-image preparation.
 
-The first slice helps you organize a question: choose a saved screenshot, inspect
-it, add notes or code, and prepare a hint, explanation, or debugging request.
-You can then explicitly send the reviewed text and selected image to OpenAI for
-study help. This integration is tested offline; live answer quality and account
-access have not yet been verified.
+This version uses deliberate still captures, not continuous video watching. It
+does not capture on startup or send a frame automatically. Real display capture,
+free-account availability and live model quality still need a user trial;85offline
+tests use synthetic pixels and mocked replies. RoleWeave is paused while StudyFrame
+is the active portfolio implementation. CueDesk remains a separate historical
+reference, not a second app being developed in parallel.
 
 ## Run on Windows
 
@@ -35,6 +38,14 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
 
 ## What works
 
+- **Capture screen:** choose one connected display. StudyFrame briefly hides,
+  then captures one still PNG locally. No source thumbnail capture or network call
+  happens while listing displays. A timestamp identifies the capture; click again
+  for new pixels. Ctrl+Shift+S is an app-focused shortcut, not a global hotkey.
+- **Keep on top:** visible always-on-top window, not concealment from sharing tools.
+- **Provider choice:** free OpenRouter route or paid OpenAI. Switching clears the
+  key, prepared request, approval and follow-up context. Keys stay session-only.
+
 - Question, Review & send, and Answer tabs keep each step in its own workspace.
   Preparing opens the review; a completed answer opens the answer tab. Cancel
   and Clear session stay available below the workspace. Copy answer is explicit.
@@ -58,8 +69,8 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
 - Clear session drops the app's references to the text/image; the original file
   and system clipboard are unchanged. This is not secure memory erasure.
 
-Nothing is automatically captured, uploaded, persisted as history, or executed.
-There is no local OCR, screen capture, audio capture, telemetry, or model SDK.
+Nothing is automatically uploaded, persisted as history, or executed.
+There is no continuous capture, audio capture, local OCR, telemetry, or model SDK.
 The file picker and OS clipboard are operating-system facilities; OS/cloud
 clipboard history is outside StudyFrame's control.
 
@@ -72,16 +83,25 @@ Large supported images decode synchronously; UI responsiveness is not benchmarke
 
 ## Verify and learn
 
-For AI help: prepare your question, inspect the full text and image, enter your
-own OpenAI API key in the masked session field, check the review box, then click
-**Send reviewed request**. Never paste a key into an issue, chat, or repository.
-The app sends to `https://api.openai.com/v1/responses` using `gpt-4.1-mini`.
-Without cropping, the whole original file, including embedded metadata, is sent.
-After cropping, a fresh PNG of only the selected pixels is sent; source metadata
-is not copied. Restoring the original restores its metadata too. A follow-up also
-includes the last question and answer, displayed in the prepared text; a new
-question has no previous exchange. API usage is billed. The key is not saved by the app and Clear
-session removes it from the field; this is not secure memory erasure.
+For AI help: capture a screen or load an image, review the text and pixels, enter
+your own selected-provider key in the masked session field, check the review box
+and click **Send reviewed request**. Do not put credentials in chat or Git.
+
+- Default: `https://openrouter.ai/api/v1/responses`, model `openrouter/free`.
+  The server chooses an eligible free model, including image capability for images.
+  Requests set zero price caps, disable provider fallbacks and request providers
+  disallowing data collection. An unavailable eligible route fails; the app never
+  switches to paid OpenAI. This policy is not a zero-retention guarantee or a live
+  compatibility/availability claim. Selected model metadata is shown if returned.
+- Paid alternative: `https://api.openai.com/v1/responses`, `gpt-4.1-mini`.
+  Deliberately select it and enter its separate key. API charges apply.
+
+A display capture is a fresh pixel-only PNG. A loaded original file includes its
+original metadata until cropped. A crop sends a fresh PNG of selected pixels.
+A follow-up includes only the displayed previous question and answer, alongside
+the current image/notes. Capture/replace/crop changes reset that old exchange.
+The app does not save the key; Clear session removes it, without secure-erasure
+or clipboard-history guarantees. [Free API options and official key links](docs/free-vision-options.md).
 
 The request is asynchronous, limited to 1,500 output tokens, with a 60-second
 local deadline and 1 MiB response cap. No automatic retries or redirects occur.

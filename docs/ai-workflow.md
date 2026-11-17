@@ -1,5 +1,9 @@
 # Predict, ask, verify
 
+Current v0.3 adds selected-display capture and a default free OpenRouter route.
+The OpenAI-only notes below are historical provider evidence; see
+[screen workflow](screen-assistant.md) and [current free options](free-vision-options.md).
+
 StudyFrame now has a deliberately initiated OpenAI text/image request path.
 Its 70 offline tests cover the existing image/request rules and the new transport
 and widget transitions. No paid request, personal screenshot transmission,
