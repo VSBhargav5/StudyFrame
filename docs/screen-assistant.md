@@ -1,5 +1,9 @@
 # Screen assistant, not a saved-image-only worksheet
 
+Current v0.4 uses a compact glass overlay and direct Capture & ask. See
+[the current overlay workflow](glass-overlay.md). The v0.3 instructions below
+describe the still-supported optional preview-first path.
+
 StudyFrame is the active original Python implementation. RoleWeave is paused as
 a local MVP; CueDesk remains the reference rather than a second active app.
 This is an incremental return to screen assistance, not a claim of full Cue parity.

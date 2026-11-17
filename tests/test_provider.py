@@ -206,7 +206,7 @@ class ProviderTests(unittest.TestCase):
     def test_followup_requires_a_new_question_and_review_before_sending(self):
         window = self.answered_window()
         window.start_followup()
-        self.assertEqual(window.tabs.currentIndex(), 0)
+        self.assertTrue(window.review_pane.isHidden())
         self.assertEqual(window.question.toPlainText(), "")
         window.prepare()
         self.assertEqual(window.preview.toPlainText(), "")

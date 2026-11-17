@@ -124,12 +124,12 @@ class WindowTests(unittest.TestCase):
         self.assertIsNone(self.window.attachment)
         self.assertEqual(self.path.read_bytes(), original)
 
-    def test_tabs_move_from_question_to_review_and_clear_returns_to_question(self):
-        self.assertEqual(self.window.tabs.currentIndex(), 0)
+    def test_review_drawer_opens_for_preparation_and_clear_returns_to_overlay(self):
+        self.assertTrue(self.window.review_pane.isHidden())
         self.prepare()
-        self.assertEqual(self.window.tabs.currentIndex(), 1)
+        self.assertFalse(self.window.review_pane.isHidden())
         self.window.clear_session()
-        self.assertEqual(self.window.tabs.currentIndex(), 0)
+        self.assertTrue(self.window.review_pane.isHidden())
 
     def test_copy_answer_requires_a_current_completed_answer(self):
         clipboard = Mock()
@@ -138,7 +138,7 @@ class WindowTests(unittest.TestCase):
             clipboard.setText.assert_not_called()
             self.window.busy = True
             self.window.receive_answer("Synthetic <b>plain text</b> answer")
-            self.assertEqual(self.window.tabs.currentIndex(), 2)
+            self.assertTrue(self.window.answer.isVisible())
             self.window.copy_answer()
             clipboard.setText.assert_called_once_with("Synthetic <b>plain text</b> answer")
             self.window.question.setPlainText("A different question")
