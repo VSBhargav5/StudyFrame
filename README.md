@@ -2,24 +2,29 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.4.0: glass desktop companion.** A compact, draggable translucent overlay
-with a question field, one Capture & ask button and an answer panel. Connect your
-model once in the connection drawer. Clicking Capture & ask explicitly captures
-the selected display and sends those fresh pixels plus your question; an empty
-question asks for a screen explanation. No mandatory tabs, notes or per-frame
-checkbox in that direct flow. Collapse to a small bar without losing the answer.
+**v0.5.0: native glass capsule with capture exclusion.** StudyFrame now opens
+as a small 360 × 90 logical-pixel desktop capsule. Drag its free title area,
+click **+** for the question/answer panel, or **…** for connection/privacy settings.
+Collapse back without losing the answer. The capsule shows when an answer is ready.
 
-Preview and crop remain available for a local-only capture and an explicitly
-reviewed send. OpenRouter free routing is the default; paid OpenAI stays separately
-labelled. This is visible desktop assistance: no screen-recording exclusion,
-process concealment or monitoring bypass. The surface is translucent/gradient
-painted; native background blur is not claimed. Keep/crop sensitive material out
-before using the direct action.
+On supported Windows systems, a guarded native Acrylic compatibility path blurs
+the actual background; other platforms retain the painted translucent fallback.
+Capture exclusion is requested by default for StudyFrame's own overlay. Its status
+is shown in the capsule and settings. This was verified with a bounded synthetic
+Windows 11 screen capture, **not every screen-sharing/recording tool**. No process
+hiding or monitoring bypass. [Native capsule, evidence and limitations](docs/native-capsule.md).
 
-This version captures still images on your click, not continuous video.98offline
-tests use synthetic pixels/mocked replies; real OS/compositor/scaling behavior,
-free-account routing and live quality still require a trial. RoleWeave remains
-paused. [Overlay workflow and controls](docs/glass-overlay.md).
+Connect a model in the drawer, then **Capture & ask** explicitly captures the
+selected display and sends its fresh pixels plus your question. An empty new
+question asks for a screen explanation. Preview/crop remains available for local
+inspection before a reviewed send. No continuous capture or background uploads.
+OpenRouter free routing is the default; paid OpenAI stays separately labelled.
+
+106 offline tests use synthetic pixels/mocked replies. Native glass and exclusion
+were also visually checked on Windows build 26300 using only owned synthetic
+windows. Free-account routing, live answer quality and other recording tools still
+require trials. No live model call was made. RoleWeave remains paused.
+[Capture workflow and controls](docs/glass-overlay.md).
 
 ## Run on Windows
 
@@ -51,7 +56,8 @@ are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
 - **Preview / crop:** Capture for preview only uses a display picker and sends
   nothing. Load, crop, prepare and explicitly approve/send when you want inspection
   first. Source listing takes metadata only; timestamps identify captured stills.
-- **Keep on top:** visible always-on-top window, not concealment from sharing tools.
+- **Keep on top:** a pinnable window. Capture exclusion is a separate Windows setting
+  with explicit status; pin/unpin reapplies it to the current window handle.
 - **Provider choice:** free OpenRouter route or paid OpenAI. Switching clears the
   key, prepared request, approval and follow-up context. Keys stay session-only.
 

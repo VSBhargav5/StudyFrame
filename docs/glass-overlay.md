@@ -1,11 +1,11 @@
-# Glass desktop companion (v0.4)
+# Glass desktop companion (v0.5)
 
-The tabbed worksheet is replaced by one compact window. Python/Qt capture and
-provider code remain; no web runtime or new dependency. The surface uses translucent
-rounded gradient paint and a frameless window, not a native-blur or Mica promise.
-Actual appearance depends on the desktop compositor. The overlay remains an
-ordinary visible application and can appear in recording/sharing/monitoring.
-No capture-exclusion API, hidden process, anti-detection or global keyboard hook.
+The app opens as a small native glass capsule; **+** expands the same window for
+questions/answers, **…** opens settings. Collapse preserves session state. No second
+app, web runtime or dependency was added. [Native effects and capture exclusion](native-capsule.md)
+replace v0.4's painted-only surface on compatible Windows systems. Unsupported
+platforms keep the painted fallback. Capture exclusion is on by default, with
+Windows read-back status, but cannot guarantee invisibility to every recorder.
 
 ## Two deliberate actions
 
@@ -69,8 +69,8 @@ screen transmission was performed during this implementation.
 ```
 
 Demos label their answer synthetic; they do not capture the operator's desktop or
-call a model. Use a new output path: existing artifacts are refused.98tests include
-13new overlay cases alongside prior behavior. The earlier tab assertions now check
+call a model. Use a new output path: existing artifacts are refused.106 tests include
+8 native-effects/capsule cases plus the earlier overlay and request behavior. The earlier tab assertions now check
 the actual preview drawer and answer visibility, not removed UI plumbing.
 
 For60–90minutes, use a synthetic code display. Predict range(3), inspect display and
