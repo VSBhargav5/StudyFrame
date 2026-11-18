@@ -10,7 +10,10 @@ class LauncherTests(unittest.TestCase):
     def test_frozen_model_uses_executable_folder_not_unpack_or_working_directory(self):
         with tempfile.TemporaryDirectory() as folder, \
              patch.object(sys,'frozen',True,create=True), patch.object(sys,'executable',str(Path(folder)/'StudyFrame.exe')):
-            self.assertEqual(default_model(),Path(folder)/'models/vosk-model-small-en-us-0.15')
+            model = default_model()
+            self.assertTrue(model.parent.parent.samefile(folder))
+            self.assertEqual(model.parent.name,'models')
+            self.assertEqual(model.name,'vosk-model-small-en-us-0.15')
 
     def test_worker_dispatch_cannot_start_a_second_gui(self):
         with patch.object(sys,'argv',['StudyFrame.exe','--speech-worker','--source','loopback']), \
