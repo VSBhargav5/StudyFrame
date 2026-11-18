@@ -2,29 +2,30 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.5.0: native glass capsule with capture exclusion.** StudyFrame now opens
-as a small 360 × 90 logical-pixel desktop capsule. Drag its free title area,
-click **+** for the question/answer panel, or **…** for connection/privacy settings.
-Collapse back without losing the answer. The capsule shows when an answer is ready.
+**v0.6.0: clean rounded capsule and local voice questions.** StudyFrame opens
+as a small desktop capsule. **+** expands the question/answer panel; **Voice**
+opens microphone/computer-playback controls. Listen, Stop, review/edit the local
+transcript, then **Ask text only** for a text answer. No raw audio or old screenshot
+is sent by that action. [Speech setup and workflow](docs/speech.md).
 
-On supported Windows systems, a guarded native Acrylic compatibility path blurs
-the actual background; other platforms retain the painted translucent fallback.
-Capture exclusion is requested by default for StudyFrame's own overlay. Its status
-is shown in the capsule and settings. This was verified with a bounded synthetic
-Windows 11 screen capture, **not every screen-sharing/recording tool**. No process
-hiding or monitoring bypass. [Native capsule, evidence and limitations](docs/native-capsule.md).
+The rectangular Windows Acrylic backdrop is removed. The capsule now uses a
+rounded translucent gradient with sharp untouched outside corners. **Native frosted
+blur remains unresolved**; Windows' accepted Acrylic setting was not evidence of
+correct clipping. Capture exclusion stays on by default with explicit read-back
+status and lifecycle reapply. It is verified for a bounded synthetic Windows Qt
+capture, not every recorder. [Capsule evidence and limits](docs/native-capsule.md).
 
-Connect a model in the drawer, then **Capture & ask** explicitly captures the
-selected display and sends its fresh pixels plus your question. An empty new
-question asks for a screen explanation. Preview/crop remains available for local
-inspection before a reviewed send. No continuous capture or background uploads.
+**Capture & ask** still explicitly sends one fresh selected-display screenshot
+plus your question. Preview/crop remains available for local inspection before a
+reviewed send. No continuous watching, startup recording or background uploads.
 OpenRouter free routing is the default; paid OpenAI stays separately labelled.
+Transcription is offline and keyless, using optional Vosk/SoundCard dependencies
+and a trusted local model. A model-provider key is needed only for AI answers.
 
-106 offline tests use synthetic pixels/mocked replies. Native glass and exclusion
-were also visually checked on Windows build 26300 using only owned synthetic
-windows. Free-account routing, live answer quality and other recording tools still
-require trials. No live model call was made. RoleWeave remains paused.
-[Capture workflow and controls](docs/glass-overlay.md).
+Offline regressions and a public Vosk sample verified the local recognition path;
+recognition made errors on later sample digits. Real microphone/playback devices,
+live AI quality and personal usefulness remain unverified. No personal audio was
+recorded or live model call made. RoleWeave remains paused.
 
 ## Run on Windows
 

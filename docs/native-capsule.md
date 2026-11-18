@@ -1,83 +1,78 @@
-# Native glass capsule and capture exclusion
+# Rounded capsule and capture exclusion (v0.6)
 
-StudyFrame v0.5 opens as a 360 × 90 logical-pixel capsule. The surface is rounded,
-draggable and pinned by default. **+** expands the question/answer workspace; **−**
-returns to the capsule. **…** opens connection and privacy settings, expanding if
-needed. **×** closes and cancels the session. An arriving answer remains available
-behind **+**, with “Answer ready” in the capsule. No model call occurs on startup.
+StudyFrame opens as a 360 × 90 logical-pixel capsule. + expands its question/answer
+workspace; − collapses it. … opens connection/privacy settings; Voice opens
+[microphone/computer playback controls](speech.md). Drag its free title area.
+× closes and cancels. The same window preserves session state; the capsule shows
+answer-ready/listening and capture status. No startup capture, recording, model
+call, global keyboard hook or process hiding.
 
-## Glass and privacy are separate contracts
+## Why the rectangular halo is gone
 
-Glass changes how the background looks through the window. Capture exclusion asks
-Windows to omit this app-owned top-level window from supported capture paths.
-Neither implies the other. The capsule always shows capture status; settings
-describe the material result and Windows read-back. A checked box alone is not
-proof of exclusion. Unconfirmed/unsupported results are labelled unconfirmed.
+v0.5's Acrylic request visibly blurred the background, but Windows also blurred
+the rectangle outside Qt's rounded surface. A successful API return and rounded
+inner border did not prove correct clipping. The user identified this in the
+shipped screenshot. Subsequent native window/blur-region and alternate composition
+probes still failed the outside-corner pixel check on build 26300.
 
-Native Acrylic uses the guarded `SetWindowCompositionAttribute` accent policy
-compatibility export. It is undocumented and may change with Windows updates;
-there is no promise of future support. Missing/rejected exports retain the original
-painted fallback without blocking documented capture-affinity calls. No dependency
-or copied third-party implementation is included. Tint is reduced only after
-native composition accepts the request. Actual appearance depends on composition,
-transparency preferences and the session; the app does not change system settings.
+v0.6 removes that accent-backdrop request. It uses a correctly rounded Qt alpha
+surface with translucent gradient paint. **Fully frosted native blur with clean
+capsule edges remains unresolved.** No ongoing background screenshot simulates
+blur, no new rendering backend is silently introduced, and the painted appearance
+is not represented as native glass. The compatibility export and unsuccessful
+clipping helpers are absent from the shipped runtime.
 
-The documented `SetWindowDisplayAffinity` request is `WDA_EXCLUDEFROMCAPTURE`
-(`0x11`), available from Windows 10 build 19041. Earlier Windows is labelled
-unsupported rather than silently treating a blacked-out monitor-affinity window
-as exclusion. `GetWindowDisplayAffinity` must confirm the requested value. Turning
-the setting off explicitly requests and checks `WDA_NONE`. Effects are reapplied
-on show/window-handle changes, including pin/unpin and restoration after capture.
-Calls target StudyFrame's own HWND only. There are no hooks or process concealment.
+The guarded synthetic capture compares 36 pixels at the four outer corners with
+the overlay visible/excluded. Earlier Acrylic changed all 36; the corrected
+painted capsule left all 36 equal to the sharp background. The inner capsule still
+differs. This checks the actual reported artifact, alongside visual inspection.
 
-Capture exclusion is **not a universal privacy/security guarantee**. Windows API
-success does not establish compatibility with every meeting app, recorder, remote
-session or capture mechanism. Verify your own capture path with synthetic material
-before relying on it. StudyFrame's own capture workflow still hides its overlay
-before taking the selected display snapshot, independently of this setting.
-It never uploads continuously. Personal material on the selected display can still
-be sent by the explicit Capture & ask action; preview/crop first when appropriate.
+## Capture exclusion is separate
+
+SetWindowDisplayAffinity requests WDA_EXCLUDEFROMCAPTURE (0x11), supported from
+Windows 10 build 19041. Earlier Windows is labelled unsupported rather than
+silently accepting black-box monitor behavior as exclusion. GetWindowDisplayAffinity
+must confirm the requested value. Off requests/checks WDA_NONE. Status distinguishes
+confirmed/off/unconfirmed. Pin/show/handle changes reapply it; resize/DPI changes
+preserve shape. Calls target only this app's HWND; no system preferences change.
+
+API acceptance is **not a guarantee for every recorder**, remote session or capture
+mechanism. Test your own path with synthetic material. Native/OS dialogs are not
+promised excluded. StudyFrame still hides its overlay before its own selected-
+display capture, independently of the setting. Other material on that display may
+be sent by your explicit Capture & ask action; preview/crop first when needed.
+Audio captured by other applications is outside this setting.
 
 ## Reproduce the evidence
 
 ```powershell
 $env:QT_QPA_PLATFORM='windows'
 .venv/Scripts/python.exe -m unittest discover -s tests -v
-.venv/Scripts/python.exe -m examples.native_glass --output out/native-check-new
+.venv/Scripts/python.exe -m examples.native_glass --output out/capsule-check-new
 ```
 
-The second command opens an opaque synthetic backdrop and an owned StudyFrame
-window, captures only the overlay's rectangle inside that backdrop, and closes
-both. It refuses an existing output directory or an insufficient display size.
-No credentials, personal desktop capture or model/network requests are involved.
-The report records API/read-back status; inspect the PNGs rather than inferring
-glass from a successful API return. Do not move the windows during this check.
+The second command refuses existing output paths. It creates an opaque always-on-
+top synthetic backdrop with its overlay above it. Before bounded screen capture,
+it checks sampled points for other occluding windows and refuses if displaced or
+occluded. It records visible/excluded/restored capsule, expanded answer and synthetic
+voice panel PNGs plus status/corner counts in JSON. No audio/model/key is used.
+Do not move the fixture. Earlier QA lost a non-topmost backdrop to Codex; those
+artifacts were discarded and ordering/occlusion guards added before final checks.
 
-On Windows build 26300, native Acrylic visibly blurred the synthetic stripes and
-blue/yellow boundary. The capsule disappeared from `glass-excluded.png`, leaving
-the sharp underlying pattern, and returned in `glass-restored.png` after exclusion
-was turned off. `glass-answer.png` verified the expanded panel. This establishes
-that bounded Qt screen-capture path on that machine, not universal recorder support.
-106 native Windows offline tests passed. An initial fontless Windows offscreen
-run failed three existing mouse-click tests; the full native Windows run passed.
-The documented DWM system-backdrop route was also tried: it returned success but
-remained opaque here, so it is not used or represented as working glass.
+Windows build 26300 verified rounded outside corners and disappearance/restoration
+through this Qt screen-capture path. Unusual DPI, all native dialogs, other
+recorders and personal acceptance remain unverified. Native input tests now open
+and scroll the real review drawer before clicks; hidden-widget clicks were not
+valid user interaction after native hit regions were applied.
 
-## A focused practice session
-
-Spend 60–90 minutes with synthetic code only. Predict the difference between the
-visible/excluded/restored images before running the check. Open the capsule,
-expand it, enter a harmless question and collapse again. Explain why a glass
-appearance does not prove capture exclusion, and why API acceptance is weaker
-evidence than checking an actual capture. Then trace `update_window_effects` and
-the fresh screenshot send separately. The tradeoff is a Windows compatibility API
-for actual blur, with a safe visual fallback and explicitly qualified privacy.
-No practice completion or live AI usefulness is claimed by these checks.
+For 60–90 minutes, predict the images/corner counts and run the synthetic check.
+Expand/collapse, preserve an answer, and trace fresh screenshot send separately
+from exclusion. Explain why correct shape, blur and capture privacy are different
+properties. No learning/usefulness completion is claimed. The tradeoff is a correct
+rounded translucent capsule instead of misleading, incorrectly clipped native blur.
 
 Primary contracts:
 
-- [Windows display affinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity)
-- [Windows affinity read-back](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowdisplayaffinity)
-- [DWM system backdrops](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwm_systembackdrop_type)
+- [Windows affinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity)
+- [Affinity read-back](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowdisplayaffinity)
 - [Qt translucent windows](https://doc.qt.io/qt-6/qwidget.html#creating-translucent-windows)
-- [Primary compatibility implementation inspected for API shape](https://github.com/zhiyiYo/PyQt-Frameless-Window/blob/master/qframelesswindow/windows/window_effect.py)

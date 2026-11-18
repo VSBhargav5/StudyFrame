@@ -40,16 +40,23 @@ class WindowTests(unittest.TestCase):
     def prepare(self):
         self.window.question.setPlainText("Why does this loop skip the final item?")
         self.window.context.setPlainText("for i in range(3):\n    print(i)")
-        QTest.mouseClick(self.window.prepare_button, Qt.MouseButton.LeftButton)
+        self.click_review(self.window.prepare_button)
         self.assertTrue(self.window.preview.toPlainText())
         self.assertTrue(self.window.copy_button.isEnabled())
+
+    def click_review(self, widget):
+        self.window.review_toggle.setChecked(True)
+        self.app.processEvents()
+        self.window.scroll.ensureWidgetVisible(widget)
+        self.app.processEvents()
+        QTest.mouseClick(widget, Qt.MouseButton.LeftButton)
 
     def test_prepare_and_copy_use_visible_text_only(self):
         self.window.select_image(self.path)
         self.prepare()
         clipboard = Mock()
         with patch("studyframe.app.QApplication.clipboard", return_value=clipboard):
-            QTest.mouseClick(self.window.copy_button, Qt.MouseButton.LeftButton)
+            self.click_review(self.window.copy_button)
         clipboard.setText.assert_called_once_with(self.window.preview.toPlainText())
         self.assertNotIn(str(self.path), self.window.preview.toPlainText())
         self.assertNotIn(self.window.attachment.sha256, self.window.preview.toPlainText())
@@ -70,7 +77,7 @@ class WindowTests(unittest.TestCase):
         self.assertFalse(self.window.image_label.pixmap().isNull())
         self.assertEqual(self.window.preview.toPlainText(), "")
         self.prepare()
-        QTest.mouseClick(self.window.remove_button, Qt.MouseButton.LeftButton)
+        self.click_review(self.window.remove_button)
         self.assertIsNone(self.window.attachment)
         self.assertEqual(self.window.preview.toPlainText(), "")
         self.assertFalse(self.window.remove_button.isEnabled())

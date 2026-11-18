@@ -36,7 +36,7 @@ def main():
         parser.error('Requires at least 750 × 740 logical pixels for a bounded synthetic check.')
     args.output.mkdir(parents=True, exist_ok=False)
     backdrop = Backdrop()
-    backdrop.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+    backdrop.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
     backdrop.resize(min(1100, available.width()), min(850, available.height()))
     backdrop.move(available.center() - backdrop.rect().center())
     backdrop.show()
@@ -46,15 +46,25 @@ def main():
     window.answer.setPlainText('Synthetic answer — no model called.\n\nrange(3) produces 0, 1, 2. The stop is exclusive.\n\nTry list(range(3)) to verify this prediction.')
     window.show(); window.raise_(); window.activateWindow()
     observations = []
+    captures = {}
 
     def save(name):
         region = window.frameGeometry()
         # The window must remain entirely inside our opaque backdrop.
         if not backdrop.geometry().contains(region):
             raise RuntimeError('Synthetic overlay escaped the owned backdrop; refusing capture.')
+        for x in range(7):
+            for y in range(5):
+                point = region.topLeft()
+                point.setX(region.left() + x * (region.width()-1)//6)
+                point.setY(region.top() + y * (region.height()-1)//4)
+                if app.topLevelAt(point) not in (window, backdrop):
+                    raise RuntimeError('Another window occludes the synthetic fixture; refusing capture.')
         image = backdrop.screen().grabWindow(0, region.x(), region.y(), region.width(), region.height())
         if image.isNull() or not image.save(str(args.output / (name + '.png'))):
             raise RuntimeError('Synthetic capture failed.')
+        if name in ('glass-visible', 'glass-excluded'):
+            captures[name] = image.toImage()
         observations.append({'step': name, 'requested_exclusion': window.exclude_capture.isChecked(),
                              'status': window.privacy_badge.text(), 'detail': window.effects_info.text()})
 
@@ -78,7 +88,18 @@ def main():
 
     def expanded():
         save('glass-answer')
-        report = {'windows_build': sys.getwindowsversion().build, 'observations': observations}
+        window.open_voice()
+        window.speech_text.setPlainText('Synthetic transcript: why does range three stop before three?')
+        QTimer.singleShot(700, voice)
+
+    def voice():
+        save('glass-voice')
+        shown, hidden = captures['glass-visible'], captures['glass-excluded']
+        points = [(x if left else shown.width()-1-x, y if top else shown.height()-1-y)
+                  for x in range(3) for y in range(3) for left in (True, False) for top in (True, False)]
+        unchanged = sum(shown.pixelColor(x,y) == hidden.pixelColor(x,y) for x,y in points)
+        report = {'windows_build': sys.getwindowsversion().build, 'observations': observations,
+                  'outside_corner_pixels_unchanged': unchanged, 'outside_corner_pixels_checked': len(points)}
         (args.output / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
         print(json.dumps(report))
         window.close(); backdrop.close(); app.quit()
