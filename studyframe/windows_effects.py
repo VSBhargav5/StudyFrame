@@ -8,6 +8,8 @@ import ctypes
 import sys
 from dataclasses import dataclass
 
+FALLBACK_MATERIAL = 'Rounded translucent surface; native blur disabled to avoid a rectangular halo.'
+
 
 @dataclass(frozen=True)
 class WindowEffects:
@@ -34,7 +36,7 @@ def apply_window_effects(hwnd, exclude, *, api=None, build=None):
     # Accent/Acrylic ignores the rounded alpha boundary on this supported host.
     # Do not trade a false glass claim for the rectangular halo the user reported.
     glass = False
-    material = 'Rounded translucent surface; native blur disabled to avoid a rectangular halo.'
+    material = FALLBACK_MATERIAL
     if build is None or build < 19041:
         return WindowEffects(glass, False, material + ' Capture exclusion requires Windows 10 build 19041 or newer.')
     try:

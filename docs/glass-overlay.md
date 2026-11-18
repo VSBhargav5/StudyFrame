@@ -6,7 +6,7 @@ microphone/playback transcription. [Speech setup](speech.md). Collapse preserves
 session state. No second app or web runtime was added. The rectangular native
 Acrylic backdrop is disabled; a clean rounded painted surface replaces it.
 [Capsule evidence and capture exclusion](native-capsule.md) describes the remaining
-native-blur limitation and read-back status. Exclusion is on by default but is not
+native frost, fallback and read-back status. Exclusion is on by default but is not
 a guarantee for every recorder. Never infer privacy from appearance.
 
 ## Two deliberate actions

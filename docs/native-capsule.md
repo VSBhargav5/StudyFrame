@@ -1,4 +1,4 @@
-# Rounded capsule and capture exclusion (v0.6)
+# Rounded capsule and capture exclusion (v0.8)
 
 StudyFrame opens as a 360 × 90 logical-pixel capsule. + expands its question/answer
 workspace; − collapses it. … opens connection/privacy settings; Voice opens
@@ -15,17 +15,27 @@ inner border did not prove correct clipping. The user identified this in the
 shipped screenshot. Subsequent native window/blur-region and alternate composition
 probes still failed the outside-corner pixel check on build 26300.
 
-v0.6 removes that accent-backdrop request. It uses a correctly rounded Qt alpha
-surface with translucent gradient paint. **Fully frosted native blur with clean
-capsule edges remains unresolved.** No ongoing background screenshot simulates
-blur, no new rendering backend is silently introduced, and the painted appearance
-is not represented as native glass. The compatibility export and unsuccessful
-clipping helpers are absent from the shipped runtime.
+v0.6 removed that accent request and shipped correctly rounded translucent Qt
+paint. v0.8 adds a deliberate, Windows-only compositor integration: a separate
+owned non-activating HWND hosts `CreateHostBackdropBrush`, clipped by
+`CompositionRoundedRectangleGeometry`. The existing Qt controls sit above it.
+The compositor handles the backdrop; the app does not read back or periodically
+capture desktop pixels to fake blur. No backend/request/audio rewrite was needed.
 
-The guarded synthetic capture compares 36 pixels at the four outer corners with
-the overlay visible/excluded. Earlier Acrylic changed all 36; the corrected
-painted capsule left all 36 equal to the sharp background. The inner capsule still
-differs. This checks the actual reported artifact, alongside visual inspection.
+This costs seven Windows-only PyWinRT dependencies and explicit companion-window
+lifecycle handling. The companion tracks physical HWND bounds, inset/radius and
+pinning; it hides when Qt hides/minimizes, including before an explicit screenshot.
+Both layers get independent capture-affinity read-back before showing the native
+surface. An unavailable API/binding or unconfirmed companion affinity closes the
+companion and leaves the rounded Qt fallback. The dispatcher is shared within the
+app and shut down with message pumping after its visuals close.
+
+On build 26300 at 125% scaling, an opaque synthetic striped fixture visibly blurs
+inside the rounded capsule, while all 36 sampled outside-corner pixels remain
+sharp/unchanged. The excluded capture also matches the entirely hidden-overlay
+baseline. This establishes the tested host/path, not all monitors or recorders.
+Windows transparency/accessibility/power policies can affect material appearance;
+there is no claim that an accepted API proves blur on every machine.
 
 ## Capture exclusion is separate
 
@@ -34,7 +44,7 @@ Windows 10 build 19041. Earlier Windows is labelled unsupported rather than
 silently accepting black-box monitor behavior as exclusion. GetWindowDisplayAffinity
 must confirm the requested value. Off requests/checks WDA_NONE. Status distinguishes
 confirmed/off/unconfirmed. Pin/show/handle changes reapply it; resize/DPI changes
-preserve shape. Calls target only this app's HWND; no system preferences change.
+preserve shape. Calls target only this app's two owned HWNDs; no system preferences change.
 
 API acceptance is **not a guarantee for every recorder**, remote session or capture
 mechanism. Test your own path with synthetic material. Native/OS dialogs are not
@@ -68,11 +78,17 @@ valid user interaction after native hit regions were applied.
 For 60–90 minutes, predict the images/corner counts and run the synthetic check.
 Expand/collapse, preserve an answer, and trace fresh screenshot send separately
 from exclusion. Explain why correct shape, blur and capture privacy are different
-properties. No learning/usefulness completion is claimed. The tradeoff is a correct
-rounded translucent capsule instead of misleading, incorrectly clipped native blur.
+properties. No learning/usefulness completion is claimed. The tradeoff is a Windows-specific native companion and dispatcher lifecycle
+in return for a truly rounded backdrop, with safe Qt fallback on unsupported hosts.
 
 Primary contracts:
 
 - [Windows affinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity)
 - [Affinity read-back](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowdisplayaffinity)
 - [Qt translucent windows](https://doc.qt.io/qt-6/qwidget.html#creating-translucent-windows)
+
+
+Primary contracts: [host backdrop brush](https://learn.microsoft.com/en-us/uwp/api/windows.ui.composition.compositor.createhostbackdropbrush),
+[desktop composition interop](https://pywinrt.readthedocs.io/en/latest/api/windows/ui/composition/interop/),
+[dispatcher lifecycle](https://pywinrt.readthedocs.io/en/latest/api/windows/system/interop/),
+[freezing PyWinRT tables](https://pywinrt.readthedocs.io/en/latest/freezing/).

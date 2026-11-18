@@ -18,7 +18,8 @@ from studyframe.requests import RequestError, prepare_request
 from studyframe.provider import StudyProvider, payload, PROVIDERS, provider_config
 from studyframe.capture import capture_screen
 from studyframe.glass import GlassPanel, DragBar
-from studyframe.windows_effects import apply_window_effects, WindowEffects
+from studyframe.windows_effects import apply_window_effects, WindowEffects, FALLBACK_MATERIAL
+from studyframe.backdrop import create_backdrop
 from studyframe.speech import SpeechSession
 from studyframe.preferences import Preferences
 from studyframe.launcher import default_model
@@ -46,6 +47,8 @@ class StudyWindow(QMainWindow):
         self.effects_timer = QTimer(self)
         self.effects_timer.setSingleShot(True)
         self.effects_timer.timeout.connect(self.update_window_effects)
+        self.native_backdrop = None
+        self.backdrop_attempted = False
         self.setWindowTitle(f"StudyFrame {__version__} - Screen companion")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -450,9 +453,29 @@ class StudyWindow(QMainWindow):
         self.effects_timer.stop()
 
     def event(self, event):
-        if event.type() in (QEvent.Type.WinIdChange, QEvent.Type.DevicePixelRatioChange) and hasattr(self, 'effects_timer'):
+        if event.type() in (QEvent.Type.WinIdChange, QEvent.Type.DevicePixelRatioChange,
+                            QEvent.Type.WindowStateChange, QEvent.Type.ActivationChange,
+                            QEvent.Type.ZOrderChange) and hasattr(self, 'effects_timer'):
             self.effects_timer.start(0)
         return super().event(event)
+
+    def hideEvent(self, event):
+        if self.native_backdrop is not None:
+            self.native_backdrop.hide()
+        super().hideEvent(event)
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        if getattr(self, 'native_backdrop', None) is not None:
+            self.sync_backdrop()
+
+    def sync_backdrop(self):
+        try:
+            self.native_backdrop.sync()
+        except (OSError, RuntimeError):
+            self.native_backdrop.close()
+            self.native_backdrop = None
+            self.effects_timer.start(0)
 
     def update_window_effects(self):
         if not self.isVisible():
@@ -461,6 +484,22 @@ class StudyWindow(QMainWindow):
             result = apply_window_effects(int(self.winId()), self.exclude_capture.isChecked())
         else:
             result = WindowEffects(False, False, 'Native glass and capture exclusion unavailable on this Qt platform.')
+        try:
+            if not self.backdrop_attempted:
+                self.backdrop_attempted = True
+                self.native_backdrop = create_backdrop(self)
+            if self.native_backdrop is not None:
+                self.native_backdrop.configure(self.exclude_capture.isChecked())
+                result = WindowEffects(True, result.excluded,
+                                       'Rounded Windows host-backdrop frost; appearance follows system transparency settings. '
+                                       + result.detail.removeprefix(FALLBACK_MATERIAL).lstrip(), result.capture_confirmed)
+        except (ImportError, OSError, RuntimeError, AttributeError):
+            if self.native_backdrop is not None:
+                self.native_backdrop.close()
+                self.native_backdrop = None
+            result = WindowEffects(False, result.excluded,
+                                   result.detail + ' Compositor backdrop unavailable; rounded Qt fallback active.',
+                                   result.capture_confirmed)
         self.centralWidget().set_native_material(result.glass)
         self.effects_info.setText(result.detail)
         self.capture_state = ('Capture excluded' if result.excluded else
@@ -836,6 +875,10 @@ class StudyWindow(QMainWindow):
         self.save_setup()
         self.speech.cancel()
         self.effects_timer.stop()
+        if self.native_backdrop is not None:
+            self.native_backdrop.close()
+            self.native_backdrop = None
+        self.backdrop_attempted = False
         self.direct_request = None
         self.capture_timer.stop()
         self.pending_screen = None

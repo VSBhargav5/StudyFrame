@@ -61,7 +61,12 @@ def main():
             source = Path(distribution.locate_file(entry)).resolve()
             if not source.is_relative_to(root) or not source.is_file() or source.stat().st_size > 1024*1024:
                 continue
-            destination = bundle/'licenses'/label/source.relative_to(root)
+            relative = source.relative_to(root)
+            # Avoid repeating the long distribution/version directory beneath
+            # its own package label (WinRT exceeded MAX_PATH on this checkout).
+            if relative.parts[0].endswith(('.dist-info', '.egg-info')):
+                relative = Path(*relative.parts[1:])
+            destination = bundle/'licenses'/label/relative
             destination.parent.mkdir(parents=True,exist_ok=True)
             if not destination.exists(): shutil.copyfile(source,destination)
     python_license = Path(sys.base_prefix)/'LICENSE.txt'

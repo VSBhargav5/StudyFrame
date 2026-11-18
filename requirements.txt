@@ -1,2 +1,9 @@
 PySide6-Essentials==6.11.3
+winrt-runtime==4.2.0; sys_platform == 'win32'
+winrt-Windows.UI.Composition==4!10.0.28000.2957; sys_platform == 'win32'
+winrt-Windows.UI.Composition.Desktop==4!10.0.28000.2957; sys_platform == 'win32'
+winrt-Windows.System==4!10.0.28000.2957; sys_platform == 'win32'
+winrt-Windows.Foundation.Numerics==4!10.0.28000.2957.1; sys_platform == 'win32'
+winrt-Windows.UI.Composition.Interop==4.0.0; sys_platform == 'win32'
+winrt-Windows.System.Interop==4.0.0; sys_platform == 'win32'
 shiboken6==6.11.3
