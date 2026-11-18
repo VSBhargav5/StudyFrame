@@ -2,18 +2,20 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.7.1: standalone Windows screen-and-voice companion.** StudyFrame opens
+**v0.8.0: rounded native frost, screen-and-voice companion.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Listen, Stop, review/edit the local
 transcript, then **Ask text only** for a text answer. No raw audio or old screenshot
 is sent by that action. [Speech setup and workflow](docs/speech.md).
 
-The rectangular Windows Acrylic backdrop is removed. The capsule now uses a
-rounded translucent gradient with sharp untouched outside corners. **Native frosted
-blur remains unresolved**; Windows' accepted Acrylic setting was not evidence of
-correct clipping. Capture exclusion stays on by default with explicit read-back
-status and lifecycle reapply. It is verified for a bounded synthetic Windows Qt
-capture, not every recorder. [Capsule evidence and limits](docs/native-capsule.md).
+On Windows 11, the capsule uses a real compositor host-backdrop brush clipped to
+its rounded shape, behind the existing Qt controls. No rectangular Acrylic halo
+or background screenshot is used to simulate blur. Unsupported/disabled hosts
+retain the rounded translucent fallback. Both owned layers receive capture
+exclusion with read-back; the companion stays hidden if its setting is unconfirmed.
+The guarded Windows synthetic fixture verifies untouched corners and exclusion
+against the hidden-window baseline. Other recorders can differ.
+[Capsule evidence and limits](docs/native-capsule.md).
 
 **Capture & ask** still explicitly sends one fresh selected-display screenshot
 plus your question. Preview/crop remains available for local inspection before a

@@ -55,13 +55,14 @@ checks native recognition libraries/model with silence, **without opening audio*
 It makes no model API request and captures no desktop. The portable GUI worker
 explicitly restores inherited pipe streams and never recursively starts a GUI.
 
-Native frosted blur remains unresolved. v0.7 deliberately keeps correctly rounded
-translucent paint instead of the square Acrylic halo. Microsoft documents that
-per-pixel-alpha/window-region shapes cannot use its automatic rounding shortcut;
-a true shaped frosted renderer would need a deliberate composition-backend change.
-No unsupported API return is counted as proof. Capture exclusion remains a separate
-Windows setting; other recording tools, unusual DPI/dialogs and personal acceptance
-still need checking. No blanket production-ready, learning or usefulness claim.
+v0.8 uses a Windows 11 compositor host-backdrop brush and rounded geometric clip.
+The extra owned, non-activating HWND follows Qt bounds in physical pixels and
+hides during capture/minimization/close. Failure falls back to rounded Qt paint.
+This replaces the unsupported Acrylic clipping approach, not the Python app.
+The local synthetic check proves actual frost and untouched outside corners on
+build 26300; system transparency policies can change its appearance. Other
+recording tools, unusual DPI/dialogs and personal acceptance still need checking.
+No blanket production-ready, learning or usefulness claim.
 
 ## Reproduce the build and checks
 
@@ -78,7 +79,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.7.1/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.7.1/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.8.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.8.0/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds

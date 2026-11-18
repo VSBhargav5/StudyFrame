@@ -44,6 +44,12 @@ def main(argv=None):
             window.show(); app.processEvents()
             assert window.width() <= 380 and window.height() <= 105
             checks.append('native-capsule-startup')
+            if app.platformName() == 'windows' and sys.getwindowsversion().build >= 22000:
+                # Freeze missing bindings/tables must fail the build, not silently
+                # ship the fallback. Remote/OS policy can still affect appearance.
+                assert window.native_backdrop is not None
+                assert window.centralWidget().native_material
+                checks.append('native-compositor-bindings-and-host-target')
             window.key.setText('synthetic-selftest-key')
             window.speech_text.setPlainText('Why does range(3) stop before three?')
             window.ask_transcript(); app.processEvents()

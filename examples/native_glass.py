@@ -63,7 +63,7 @@ def main():
         image = backdrop.screen().grabWindow(0, region.x(), region.y(), region.width(), region.height())
         if image.isNull() or not image.save(str(args.output / (name + '.png'))):
             raise RuntimeError('Synthetic capture failed.')
-        if name in ('glass-visible', 'glass-excluded'):
+        if name in ('glass-visible', 'glass-excluded', 'glass-baseline'):
             captures[name] = image.toImage()
         observations.append({'step': name, 'requested_exclusion': window.exclude_capture.isChecked(),
                              'status': window.privacy_badge.text(), 'detail': window.effects_info.text()})
@@ -71,6 +71,11 @@ def main():
     def visible():
         window.exclude_capture.setChecked(False)
         QTimer.singleShot(700, lambda: (save('glass-visible'), hidden()))
+
+    def baseline():
+        save('glass-baseline')
+        window.show(); window.raise_()
+        QTimer.singleShot(700, visible)
 
     def hidden():
         window.exclude_capture.setChecked(True)
@@ -99,13 +104,15 @@ def main():
                   for x in range(3) for y in range(3) for left in (True, False) for top in (True, False)]
         unchanged = sum(shown.pixelColor(x,y) == hidden.pixelColor(x,y) for x,y in points)
         report = {'windows_build': sys.getwindowsversion().build, 'observations': observations,
-                  'outside_corner_pixels_unchanged': unchanged, 'outside_corner_pixels_checked': len(points)}
+                  'outside_corner_pixels_unchanged': unchanged, 'outside_corner_pixels_checked': len(points),
+                  'excluded_matches_hidden_fixture': hidden == captures['glass-baseline']}
         (args.output / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
         print(json.dumps(report))
         window.close(); backdrop.close(); app.quit()
 
-    QTimer.singleShot(700, visible)
-    QTimer.singleShot(8000, app.quit)
+    window.hide()
+    QTimer.singleShot(700, baseline)
+    QTimer.singleShot(10000, app.quit)
     app.exec()
     return 0 if (args.output / 'report.json').exists() else 1
 

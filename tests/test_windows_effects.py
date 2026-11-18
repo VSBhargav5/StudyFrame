@@ -88,6 +88,7 @@ class EffectsLifecycleTests(unittest.TestCase):
         window = StudyWindow()
         self.addCleanup(window.deleteLater); self.addCleanup(window.close)
         with patch('studyframe.app.QApplication.platformName', return_value='windows'), \
+             patch('studyframe.app.create_backdrop', return_value=None), \
              patch('studyframe.app.apply_window_effects', return_value=WindowEffects(True, True, 'confirmed')) as apply:
             window.show(); self.app.processEvents(); self.app.processEvents()
             self.assertTrue(window.exclude_capture.isChecked())
