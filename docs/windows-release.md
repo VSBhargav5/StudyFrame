@@ -78,7 +78,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.7.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.7.0/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.7.1/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.7.1/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds

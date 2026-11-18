@@ -2,7 +2,7 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.7.0: standalone Windows screen-and-voice companion.** StudyFrame opens
+**v0.7.1: standalone Windows screen-and-voice companion.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Listen, Stop, review/edit the local
 transcript, then **Ask text only** for a text answer. No raw audio or old screenshot

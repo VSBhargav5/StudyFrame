@@ -49,6 +49,7 @@ def main():
     for name in ('LICENSE','README.md'):
         shutil.copyfile(repo/name,bundle/name)
     shutil.copytree(repo/'docs',bundle/'docs')
+    shutil.copytree(repo/'third_party',bundle/'third_party')
     # Public installed package license files only. Do not sweep project/user files.
     for distribution in importlib.metadata.distributions():
         root = Path(distribution.locate_file('')).resolve()
