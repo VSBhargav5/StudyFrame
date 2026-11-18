@@ -348,10 +348,10 @@ class StudyWindow(QMainWindow):
             QMainWindow, QWidget { background: transparent; color: #e8edf8; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
             QLabel#brand { font-size: 17px; font-weight: 650; }
             QLabel#brandMark { border-radius: 10px; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #b6a0ff,stop:1 #79d6e2); color: #152338; font-size: 17px; font-weight: 800; }
-            QLabel#muted { color: #9aaac0; font-size: 11px; }
-            QLabel#eyebrow { color: #b0c0d8; font-size: 10px; font-weight: 600; letter-spacing: 2px; }
+            QLabel#muted { color: #c3cfe3; font-size: 12px; }
+            QLabel#eyebrow { color: #c3cfe3; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
             QLabel#routeBadge { color: #93e5ce; font-size: 10px; font-weight: 600; background: rgba(90,220,180,18); border: 1px solid rgba(115,231,194,35); border-radius: 9px; padding: 5px 9px; }
-            QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,115); border: 1px solid rgba(177,199,239,35); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
+            QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,165); color: #e8edf8; placeholder-text-color: #c3cfe3; border: 1px solid rgba(177,199,239,55); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
             QPlainTextEdit { font-size: 14px; }
             QComboBox { padding: 6px 10px; }
             QComboBox QAbstractItemView { background: #1d263b; color: #e8edf8; selection-background-color: #454d78; }
@@ -359,9 +359,9 @@ class StudyWindow(QMainWindow):
             QPushButton:hover { background: rgba(178,196,238,35); border-color: rgba(199,216,250,85); }
             QPushButton#primary { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #d0bcff,stop:1 #9ddde9); border: 1px solid #d5d4fc; color: #20263f; font-weight: 700; }
             QPushButton#primary:hover { background: #d3d8ff; }
-            QPushButton#ghost { background: transparent; border-color: transparent; color: #aebcd1; padding: 5px 7px; font-size: 11px; }
+            QPushButton#ghost { background: transparent; border-color: transparent; color: #c5d1e6; padding: 5px 7px; font-size: 12px; }
             QPushButton#ghost:hover { background: rgba(167,187,228,22); color: #eef1ff; }
-            QPushButton#windowButton { background: transparent; border: none; padding: 0; font-size: 19px; color: #a8b4cd; }
+            QPushButton#windowButton { background: transparent; border: none; padding: 0; font-size: 19px; color: #d0d9ec; }
             QPushButton#windowButton:hover { background: rgba(200,210,240,30); color: white; }
             QPushButton:disabled { color: #66748e; background: rgba(30,40,60,30); border-color: rgba(140,160,200,15); }
             QPlainTextEdit:focus, QLineEdit:focus, QComboBox:focus { border-color: #a6a1dd; }
