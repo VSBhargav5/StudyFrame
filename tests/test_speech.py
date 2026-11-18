@@ -165,6 +165,12 @@ class SessionTests(unittest.TestCase):
         self.assertIs(self.session.process, new); self.text.assert_not_called()
         self.session.timeout(); self.assertFalse(self.session.active)
         new.kill.assert_called_once(); self.error.assert_called_once()
+
+    def test_frozen_worker_launches_same_executable_with_explicit_worker_dispatch(self):
+        with patch.object(sys,'frozen',True,create=True):
+            process = self.start()
+        self.assertEqual(process.setArguments.call_args.args[0],
+                         ['--speech-worker','--source','loopback','--model','trusted-model'])
     def test_invalid_oversized_empty_and_failed_worker_never_yield_transcript(self):
         for output, code in ((b'not-json\n', 0), (b'x'*65537, 0),
                              (b'{"type":"transcript","text":""}\n', 0),

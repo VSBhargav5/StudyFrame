@@ -44,7 +44,7 @@ class SpeechSession(QObject):
     def active(self):
         return self.process is not None
 
-    def start(self, source, model):
+    def start(self, source, model, *, check_only=False):
         if self.active:
             return
         try:
@@ -61,7 +61,8 @@ class SpeechSession(QObject):
         if executable.name.lower() == 'pythonw.exe':
             executable = executable.with_name('python.exe')
         process.setProgram(str(executable))
-        process.setArguments(['-m', 'studyframe.speech_worker', '--source', source, '--model', model])
+        dispatch = ['--speech-worker'] if getattr(sys, 'frozen', False) else ['-m', 'studyframe.speech_worker']
+        process.setArguments(dispatch + ['--source', source, '--model', model] + (['--check-only'] if check_only else []))
         process.readyReadStandardOutput.connect(lambda: self.read_output(process))
         process.readyReadStandardError.connect(lambda: process.readAllStandardError())
         process.finished.connect(lambda code, state: self.finished(process, code))

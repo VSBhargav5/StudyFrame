@@ -21,6 +21,7 @@ from studyframe.glass import GlassPanel, DragBar
 from studyframe.windows_effects import apply_window_effects, WindowEffects
 from studyframe.speech import SpeechSession
 from studyframe.preferences import Preferences
+from studyframe.launcher import default_model
 
 
 class StudyWindow(QMainWindow):
@@ -187,7 +188,7 @@ class StudyWindow(QMainWindow):
         self.speech_source.addItem('Microphone · default input device', 'microphone')
         self.speech_source.setAccessibleName('Speech audio source')
         voice.addWidget(self.speech_source)
-        self.speech_model = QLineEdit(str(Path(__file__).resolve().parents[1] / 'models/vosk-model-small-en-us-0.15'))
+        self.speech_model = QLineEdit(str(default_model()))
         self.speech_model.setAccessibleName('Local Vosk model folder')
         self.speech_model.setPlaceholderText('Choose an extracted Vosk model folder')
         voice.addWidget(self.speech_model)

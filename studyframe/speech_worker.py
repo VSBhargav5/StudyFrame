@@ -108,11 +108,12 @@ def recognize(device, recognizer, stop, emit, *, clock=time.monotonic):
     return ' '.join(piece for piece in pieces if piece).strip()
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', choices=['microphone', 'loopback'], required=True)
     parser.add_argument('--model', required=True)
-    args = parser.parse_args()
+    parser.add_argument('--check-only', action='store_true', help='Check local imports/model without opening any audio device')
+    args = parser.parse_args(argv)
     def emit(kind, text):
         print(json.dumps({'type': kind, 'text': text}), flush=True)
     try:
@@ -126,6 +127,10 @@ def main():
         emit('status', 'Loading the local speech model…')
         model = Model(model_path=args.model)  # Explicit local path; never Model(lang=...).
         recognizer = KaldiRecognizer(model, RATE)
+        if args.check_only:
+            recognizer.AcceptWaveform(b'\0' * 3200)
+            emit('transcript', 'Local speech backend ready.')
+            return 0
         if stop.is_set():
             emit('transcript', '')
             return 0
