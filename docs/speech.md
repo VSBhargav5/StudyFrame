@@ -36,8 +36,8 @@ The small US-English `vosk-model-small-en-us-0.15` is listed as 40 MB, Apache 2.
 Indian-English/Hindi and other models are separate choices with their own licenses
 and accuracy. Put the extracted folder in `models/` in the checkout, or choose its
 folder with **Model folder…**. Select the folder containing `am/` and `conf/`, not
-the ZIP or its parent. Model choice is session-local. An installed copy launched
-elsewhere may need you to choose the folder. The selected model determines language.
+the ZIP or its parent. Model folder, audio source, provider and pinning are remembered in local setup preferences. An installed copy launched
+elsewhere may need you to choose the folder. Use Save setup in connection settings or close normally to save them. Keys, questions, transcripts and approval are never saved; capture exclusion starts on again. The selected model determines language.
 
 The current local checkout already has the optional dependencies and that small
 English model installed for development verification. They are not bundled into

@@ -20,13 +20,15 @@ from studyframe.capture import capture_screen
 from studyframe.glass import GlassPanel, DragBar
 from studyframe.windows_effects import apply_window_effects, WindowEffects
 from studyframe.speech import SpeechSession
+from studyframe.preferences import Preferences
 
 
 class StudyWindow(QMainWindow):
-    def __init__(self, provider=None, *, start_collapsed=False, speech=None):
+    def __init__(self, provider=None, *, start_collapsed=False, speech=None, preferences=None):
         super().__init__()
         self.provider = provider or StudyProvider(self)
         self.speech = speech or SpeechSession(self)
+        self.preferences = preferences
         self.busy = False
         self.pending_screen = None
         self.capture_timer = QTimer(self)
@@ -246,6 +248,14 @@ class StudyWindow(QMainWindow):
         self.effects_info.setObjectName('muted')
         self.effects_info.setWordWrap(True)
         settings.addWidget(self.effects_info)
+        self.save_setup_button = QPushButton('Save setup')
+        self.save_setup_button.setEnabled(preferences is not None)
+        settings.addWidget(self.save_setup_button)
+        self.setup_note = QLabel('Only provider, audio source, model folder and pinning are saved locally. '
+                                'Keys, questions and transcripts are never saved. Capture exclusion starts on each time.')
+        self.setup_note.setObjectName('muted')
+        self.setup_note.setWordWrap(True)
+        settings.addWidget(self.setup_note)
         self.settings_pane.hide()
         content.addWidget(self.settings_pane)
 
@@ -384,6 +394,7 @@ class StudyWindow(QMainWindow):
         self.provider.failed.connect(self.receive_error)
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
+        self.save_setup_button.clicked.connect(self.save_setup)
         self.voice_button.clicked.connect(self.open_voice)
         self.speech_browse.clicked.connect(self.choose_speech_model)
         self.speech_record.clicked.connect(self.record_speech)
@@ -395,9 +406,32 @@ class StudyWindow(QMainWindow):
         self.speech.failed.connect(self.speech_failed)
         self.speech.transcript.connect(self.receive_transcript)
         self.provider_changed()
+        if preferences is not None:
+            saved = preferences.load()
+            if saved:
+                self.provider_choice.setCurrentIndex(self.provider_choice.findData(saved['provider']))
+                self.speech_source.setCurrentIndex(self.speech_source.findData(saved['source']))
+                self.speech_model.setText(saved['model'])
+                self.pin.blockSignals(True)
+                self.pin.setChecked(saved['pin'])
+                self.pin.blockSignals(False)
+                self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, saved['pin'])
+            if preferences.warning:
+                self.setup_note.setText(preferences.warning)
         self.status.setText('Connect a model, then Capture & ask.')
         if start_collapsed:
             self.collapse_button.setChecked(True)
+
+    def save_setup(self):
+        if self.preferences is None:
+            return
+        try:
+            self.preferences.save(self.provider_choice.currentData(), self.speech_source.currentData(),
+                                  self.speech_model.text(), self.pin.isChecked())
+        except (OSError, ValueError):
+            self.setup_note.setText('Setup could not be saved. Existing saved setup was preserved; session still works.')
+        else:
+            self.setup_note.setText('Setup saved locally. Keys, questions, images and transcripts were not saved.')
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -787,6 +821,7 @@ class StudyWindow(QMainWindow):
         self.status.setText("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
 
     def closeEvent(self, event):
+        self.save_setup()
         self.speech.cancel()
         self.effects_timer.stop()
         self.direct_request = None
@@ -953,6 +988,6 @@ class StudyWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("StudyFrame")
-    window = StudyWindow(start_collapsed=True)
+    window = StudyWindow(start_collapsed=True, preferences=Preferences.default())
     window.show()
     return app.exec()
