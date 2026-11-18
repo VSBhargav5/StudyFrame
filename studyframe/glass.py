@@ -5,20 +5,28 @@ from PySide6.QtWidgets import QWidget
 
 
 class GlassPanel(QWidget):
+    native_material = False
+    compact = False
+
+    def set_native_material(self, enabled):
+        self.native_material = enabled
+        self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         area = QRectF(self.rect()).adjusted(7, 7, -7, -7)
+        radius = area.height()/2 if self.compact else 22
         painter.setPen(Qt.PenStyle.NoPen)
         for distance in range(6, 0, -1):
             painter.setBrush(QColor(0, 0, 0, 5))
-            painter.drawRoundedRect(area.adjusted(-distance, -distance, distance, distance), 25, 25)
+            painter.drawRoundedRect(area.adjusted(-distance, -distance, distance, distance), radius+3, radius+3)
         path = QPainterPath()
-        path.addRoundedRect(area, 22, 22)
+        path.addRoundedRect(area, radius, radius)
         surface = QLinearGradient(area.topLeft(), area.bottomRight())
-        surface.setColorAt(0, QColor(34, 42, 65, 204))
-        surface.setColorAt(0.55, QColor(16, 23, 36, 224))
-        surface.setColorAt(1, QColor(21, 26, 43, 209))
+        surface.setColorAt(0, QColor(34, 42, 65, 32 if self.native_material else 204))
+        surface.setColorAt(0.55, QColor(16, 23, 36, 45 if self.native_material else 224))
+        surface.setColorAt(1, QColor(21, 26, 43, 35 if self.native_material else 209))
         painter.fillPath(path, surface)
         painter.save()
         painter.setClipPath(path)

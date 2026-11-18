@@ -5,8 +5,8 @@ from pathlib import Path
 from datetime import datetime
 from studyframe import __version__
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QTimer, QEvent, QRectF
+from PySide6.QtGui import QPixmap, QPainterPath, QRegion
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
     QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QDialog, QInputDialog, QFrame, QSizeGrip, QProgressBar,
@@ -18,10 +18,11 @@ from studyframe.requests import RequestError, prepare_request
 from studyframe.provider import StudyProvider, payload, PROVIDERS, provider_config
 from studyframe.capture import capture_screen
 from studyframe.glass import GlassPanel, DragBar
+from studyframe.windows_effects import apply_window_effects, WindowEffects
 
 
 class StudyWindow(QMainWindow):
-    def __init__(self, provider=None):
+    def __init__(self, provider=None, *, start_collapsed=False):
         super().__init__()
         self.provider = provider or StudyProvider(self)
         self.busy = False
@@ -37,6 +38,9 @@ class StudyWindow(QMainWindow):
         self.image_name = ""
         self.direct_request = None
         self.expanded_size = None
+        self.effects_timer = QTimer(self)
+        self.effects_timer.setSingleShot(True)
+        self.effects_timer.timeout.connect(self.update_window_effects)
         self.setWindowTitle(f"StudyFrame {__version__} - Screen companion")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -45,6 +49,7 @@ class StudyWindow(QMainWindow):
         panel = GlassPanel()
         self.setCentralWidget(panel)
         root = QVBoxLayout(panel)
+        self.root_layout = root
         root.setContentsMargins(25, 21, 25, 18)
         root.setSpacing(12)
 
@@ -58,6 +63,7 @@ class StudyWindow(QMainWindow):
         mark.setFixedSize(32,32)
         title.addWidget(mark)
         name = QLabel('StudyFrame')
+        self.brand_name = name
         name.setObjectName('brand')
         name.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         name.setToolTip(f'StudyFrame {__version__} - visible desktop companion')
@@ -192,6 +198,14 @@ class StudyWindow(QMainWindow):
         self.pin = QCheckBox('Keep above other windows')
         self.pin.setChecked(True)
         settings.addWidget(self.pin)
+        self.exclude_capture = QCheckBox('Exclude overlay from supported captures')
+        self.exclude_capture.setChecked(True)
+        self.exclude_capture.setToolTip('Windows capture exclusion for this overlay only. Not a guarantee for every recorder.')
+        settings.addWidget(self.exclude_capture)
+        self.effects_info = QLabel('Checking Windows effects when the window opens…')
+        self.effects_info.setObjectName('muted')
+        self.effects_info.setWordWrap(True)
+        settings.addWidget(self.effects_info)
         self.settings_pane.hide()
         content.addWidget(self.settings_pane)
 
@@ -256,6 +270,10 @@ class StudyWindow(QMainWindow):
         self.status.setObjectName('muted')
         self.status.setMaximumHeight(44)
         footer.addWidget(self.status,1)
+        self.privacy_badge = QLabel('Checking capture…')
+        self.capture_state = 'Checking capture…'
+        self.privacy_badge.setObjectName('muted')
+        footer.addWidget(self.privacy_badge)
         self.size_grip = QSizeGrip(self)
         self.size_grip.setFixedSize(14,14)
         footer.addWidget(self.size_grip,0,Qt.AlignmentFlag.AlignBottom)
@@ -300,6 +318,7 @@ class StudyWindow(QMainWindow):
         self.collapse_button.toggled.connect(self.collapse_overlay)
         self.close_button.clicked.connect(self.close)
         self.pin.toggled.connect(self.pin_window)
+        self.exclude_capture.toggled.connect(self.update_window_effects)
         self.provider_choice.currentIndexChanged.connect(self.provider_changed)
         self.choose_button.clicked.connect(self.choose_image)
         self.remove_button.clicked.connect(self.remove_image)
@@ -310,6 +329,7 @@ class StudyWindow(QMainWindow):
         self.copy_answer_button.clicked.connect(self.copy_answer)
         self.clear_button.clicked.connect(self.clear_session)
         self.question.textChanged.connect(self.invalidate)
+        self.answer.textChanged.connect(self.update_capsule_status)
         self.context.textChanged.connect(self.material_changed)
         self.mode.currentIndexChanged.connect(self.invalidate)
         self.consent.toggled.connect(self.update_send)
@@ -322,6 +342,45 @@ class StudyWindow(QMainWindow):
         self.new_topic_button.clicked.connect(self.new_topic)
         self.provider_changed()
         self.status.setText('Connect a model, then Capture & ask.')
+        if start_collapsed:
+            self.collapse_button.setChecked(True)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Window flags (pin/unpin) can recreate the HWND. Reapply on every show.
+        self.update_window_effects()
+        self.effects_timer.stop()
+
+    def event(self, event):
+        if event.type() == QEvent.Type.WinIdChange and hasattr(self, 'effects_timer'):
+            self.effects_timer.start(0)
+        return super().event(event)
+
+    def update_window_effects(self):
+        if not self.isVisible():
+            return
+        if QApplication.platformName() == 'windows':
+            result = apply_window_effects(int(self.winId()), self.exclude_capture.isChecked())
+        else:
+            result = WindowEffects(False, False, 'Native glass and capture exclusion unavailable on this Qt platform.')
+        self.centralWidget().set_native_material(result.glass)
+        self.effects_info.setText(result.detail)
+        self.capture_state = ('Capture excluded' if result.excluded else
+                              ('Capture visible' if result.capture_confirmed and not self.exclude_capture.isChecked()
+                               else 'Capture unconfirmed'))
+        self.update_capsule_status()
+        self.privacy_badge.setToolTip(result.detail)
+        self.collapse_button.setToolTip(result.detail)
+        # Always visible, including the collapsed bar; never infer privacy from tint.
+        self.drag_bar.setToolTip(result.detail)
+        self.settings_toggle.setToolTip(result.detail + ' Open connection and privacy settings.')
+        self.exclude_capture.setAccessibleDescription(result.detail)
+
+    def update_capsule_status(self):
+        prefix = ''
+        if self.collapse_button.isChecked():
+            prefix = ('Thinking' if self.busy else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
+        self.privacy_badge.setText(prefix + self.capture_state)
 
     def refresh_screens(self):
         previous = self.screen_choice.currentData()
@@ -369,15 +428,30 @@ class StudyWindow(QMainWindow):
         if visible:QTimer.singleShot(0,self,self.render_image)
 
     def collapse_overlay(self, collapsed):
+        self.brand_name.setVisible(not collapsed)
+        self.status.setVisible(not collapsed)
+        self.size_grip.setVisible(not collapsed)
+        self.centralWidget().compact = collapsed
+        self.privacy_badge.setAlignment(Qt.AlignmentFlag.AlignCenter if collapsed else Qt.AlignmentFlag.AlignLeft)
         if collapsed:
             self.expanded_size = self.size()
             self.scroll.hide()
             self.collapse_button.setText('+')
-            self.resize(self.width(),112)
+            self.collapse_button.setAccessibleName('Expand answer panel')
+            self.root_layout.setContentsMargins(20,14,20,12)
+            self.root_layout.setSpacing(6)
+            self.setMinimumSize(360,90)
+            self.resize(360,90)
         else:
             self.scroll.show()
             self.collapse_button.setText('−')
+            self.collapse_button.setAccessibleName('Collapse to capsule')
+            self.root_layout.setContentsMargins(25,21,25,18)
+            self.root_layout.setSpacing(12)
+            self.setMinimumSize(470,110)
             if self.expanded_size is not None:self.resize(self.expanded_size)
+        self.update_capsule_status()
+        self.update_window_shape()
 
     def capture_and_ask(self):
         if self.busy:return
@@ -522,6 +596,7 @@ class StudyWindow(QMainWindow):
 
     def set_busy(self, busy):
         self.busy = busy
+        self.update_capsule_status()
         for widget in (self.question, self.context, self.mode, self.choose_button,
                        self.prepare_button, self.key, self.consent, self.capture_button, self.provider_choice, self.pin):
             widget.setEnabled(not busy)
@@ -587,6 +662,7 @@ class StudyWindow(QMainWindow):
         self.status.setText("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
 
     def closeEvent(self, event):
+        self.effects_timer.stop()
         self.direct_request = None
         self.capture_timer.stop()
         self.pending_screen = None
@@ -683,8 +759,16 @@ class StudyWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self.update_window_shape()
         if hasattr(self, "image_label"):
             self.render_image()
+
+    def update_window_shape(self):
+        if QApplication.platformName() == 'windows' and hasattr(self, 'collapse_button'):
+            path = QPainterPath()
+            radius = self.height()/2 if self.collapse_button.isChecked() else 28
+            path.addRoundedRect(QRectF(self.rect()), radius, radius)
+            self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
     def remove_image(self):
         self.attachment = None
@@ -740,6 +824,6 @@ class StudyWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("StudyFrame")
-    window = StudyWindow()
+    window = StudyWindow(start_collapsed=True)
     window.show()
     return app.exec()
