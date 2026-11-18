@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from PySide6.QtWidgets import QApplication
 from studyframe.app import StudyWindow
 from studyframe.windows_effects import (
-    AccentPolicy, CompositionData, WindowEffects, apply_window_effects,
+    WindowEffects, apply_window_effects,
 )
 
 
@@ -22,20 +22,13 @@ class WindowsEffectsTests(unittest.TestCase):
         api.GetWindowDisplayAffinity.side_effect = read
         return api
 
-    def test_owned_handle_acrylic_abi_and_confirmed_exclusion(self):
+    def test_owned_handle_capture_exclusion_does_not_enable_rectangular_acrylic(self):
         api = self.api()
-        def composition(hwnd, pointer):
-            self.assertEqual(hwnd, 0x123456789)
-            data = ctypes.cast(pointer, ctypes.POINTER(CompositionData)).contents
-            self.assertEqual(data.attribute, 19)
-            self.assertEqual(data.size, 16)
-            accent = ctypes.cast(data.data, ctypes.POINTER(AccentPolicy)).contents
-            self.assertEqual((accent.state, accent.tint), (4, 0x60201712))
-            return 1
-        api.SetWindowCompositionAttribute.side_effect = composition
         result = apply_window_effects(0x123456789, True, api=api, build=26300)
-        self.assertTrue(result.glass); self.assertTrue(result.excluded)
+        self.assertFalse(result.glass); self.assertTrue(result.excluded)
         api.SetWindowDisplayAffinity.assert_called_once_with(0x123456789, 0x11)
+        api.SetWindowCompositionAttribute.assert_not_called()
+        self.assertIn('native blur disabled', result.detail)
         self.assertIn('Other recording tools may differ', result.detail)
 
     def test_exclusion_off_is_explicitly_cleared_and_read_back(self):
@@ -54,13 +47,6 @@ class WindowsEffectsTests(unittest.TestCase):
                 result = apply_window_effects(7, True, api=api, build=26300)
                 self.assertFalse(result.excluded)
                 self.assertIn('could not be confirmed', result.detail)
-
-    def test_missing_private_export_keeps_documented_privacy_working(self):
-        api = self.api()
-        api.SetWindowCompositionAttribute.side_effect = AttributeError('missing export')
-        result = apply_window_effects(7, True, api=api, build=26300)
-        self.assertFalse(result.glass); self.assertTrue(result.excluded)
-        self.assertIn('Painted fallback', result.detail)
 
     def test_old_windows_does_not_silently_use_black_box_monitor_affinity(self):
         api = self.api()

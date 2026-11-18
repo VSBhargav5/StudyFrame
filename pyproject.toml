@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "studyframe"
-version = "0.5.0"
+version = "0.6.0"
 description = "A personal Python desktop workspace for studying code and screenshots"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["PySide6-Essentials==6.11.3"]
 license = {file = "LICENSE"}
+
+[project.optional-dependencies]
+speech = ["SoundCard==0.4.6", "vosk==0.3.45", "numpy==2.2.6"]
 
 [project.gui-scripts]
 studyframe = "studyframe.app:main"

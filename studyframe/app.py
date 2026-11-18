@@ -19,12 +19,14 @@ from studyframe.provider import StudyProvider, payload, PROVIDERS, provider_conf
 from studyframe.capture import capture_screen
 from studyframe.glass import GlassPanel, DragBar
 from studyframe.windows_effects import apply_window_effects, WindowEffects
+from studyframe.speech import SpeechSession
 
 
 class StudyWindow(QMainWindow):
-    def __init__(self, provider=None, *, start_collapsed=False):
+    def __init__(self, provider=None, *, start_collapsed=False, speech=None):
         super().__init__()
         self.provider = provider or StudyProvider(self)
+        self.speech = speech or SpeechSession(self)
         self.busy = False
         self.pending_screen = None
         self.capture_timer = QTimer(self)
@@ -174,6 +176,44 @@ class StudyWindow(QMainWindow):
         self.followup_note.setObjectName('muted')
         content.addWidget(self.followup_note)
 
+        self.speech_pane = QFrame()
+        self.speech_pane.setObjectName('drawer')
+        voice = QVBoxLayout(self.speech_pane)
+        voice.addWidget(QLabel('VOICE QUESTION · LOCAL TRANSCRIPTION'))
+        self.speech_source = QComboBox()
+        self.speech_source.addItem('Computer audio · default playback device', 'loopback')
+        self.speech_source.addItem('Microphone · default input device', 'microphone')
+        self.speech_source.setAccessibleName('Speech audio source')
+        voice.addWidget(self.speech_source)
+        self.speech_model = QLineEdit(str(Path(__file__).resolve().parents[1] / 'models/vosk-model-small-en-us-0.15'))
+        self.speech_model.setAccessibleName('Local Vosk model folder')
+        self.speech_model.setPlaceholderText('Choose an extracted Vosk model folder')
+        voice.addWidget(self.speech_model)
+        actions = QHBoxLayout()
+        self.speech_browse = QPushButton('Model folder…')
+        self.speech_record = QPushButton('Listen')
+        self.speech_discard = QPushButton('Discard')
+        for button in (self.speech_browse, self.speech_record, self.speech_discard): actions.addWidget(button)
+        voice.addLayout(actions)
+        self.speech_note = QLabel('Listen records up to 30 seconds from the selected source. Stop finishes early. '
+                                  'Audio stays local; review/edit the transcript, then Ask text only. '
+                                  'Optional setup: docs/speech.md.')
+        self.speech_note.setObjectName('muted')
+        self.speech_note.setWordWrap(True)
+        self.speech_note.setTextFormat(Qt.TextFormat.PlainText)
+        voice.addWidget(self.speech_note)
+        self.speech_text = QPlainTextEdit()
+        self.speech_text.setAccessibleName('Reviewed speech transcript')
+        self.speech_text.setPlaceholderText('Your local transcript appears here. Correct recognition errors before asking.')
+        self.speech_text.setFixedHeight(100)
+        voice.addWidget(self.speech_text)
+        self.ask_speech = QPushButton('Ask text only')
+        self.ask_speech.setToolTip('Send only the reviewed transcript and answer style to the chosen provider. No screenshot, audio or notes.')
+        self.ask_speech.setEnabled(False)
+        voice.addWidget(self.ask_speech)
+        self.speech_pane.hide()
+        content.addWidget(self.speech_pane)
+
         self.settings_pane = QFrame()
         self.settings_pane.setObjectName('drawer')
         settings = QVBoxLayout(self.settings_pane)
@@ -274,6 +314,10 @@ class StudyWindow(QMainWindow):
         self.capture_state = 'Checking capture…'
         self.privacy_badge.setObjectName('muted')
         footer.addWidget(self.privacy_badge)
+        self.voice_button = QPushButton('Voice')
+        self.voice_button.setObjectName('ghost')
+        self.voice_button.setAccessibleName('Voice question controls')
+        footer.addWidget(self.voice_button)
         self.size_grip = QSizeGrip(self)
         self.size_grip.setFixedSize(14,14)
         footer.addWidget(self.size_grip,0,Qt.AlignmentFlag.AlignBottom)
@@ -340,6 +384,16 @@ class StudyWindow(QMainWindow):
         self.provider.failed.connect(self.receive_error)
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
+        self.voice_button.clicked.connect(self.open_voice)
+        self.speech_browse.clicked.connect(self.choose_speech_model)
+        self.speech_record.clicked.connect(self.record_speech)
+        self.speech_discard.clicked.connect(self.discard_speech)
+        self.ask_speech.clicked.connect(self.ask_transcript)
+        self.speech_text.textChanged.connect(self.update_speech_controls)
+        self.speech.changed.connect(self.update_speech_controls)
+        self.speech.status.connect(self.speech_note.setText)
+        self.speech.failed.connect(self.speech_failed)
+        self.speech.transcript.connect(self.receive_transcript)
         self.provider_changed()
         self.status.setText('Connect a model, then Capture & ask.')
         if start_collapsed:
@@ -352,7 +406,7 @@ class StudyWindow(QMainWindow):
         self.effects_timer.stop()
 
     def event(self, event):
-        if event.type() == QEvent.Type.WinIdChange and hasattr(self, 'effects_timer'):
+        if event.type() in (QEvent.Type.WinIdChange, QEvent.Type.DevicePixelRatioChange) and hasattr(self, 'effects_timer'):
             self.effects_timer.start(0)
         return super().event(event)
 
@@ -379,8 +433,76 @@ class StudyWindow(QMainWindow):
     def update_capsule_status(self):
         prefix = ''
         if self.collapse_button.isChecked():
-            prefix = ('Thinking' if self.busy else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
+            prefix = ('Listening' if self.speech.active else 'Thinking' if self.busy else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
         self.privacy_badge.setText(prefix + self.capture_state)
+
+    def open_voice(self):
+        if self.speech.active:
+            self.speech.stop()
+            return
+        self.collapse_button.setChecked(False)
+        self.speech_pane.show()
+        QTimer.singleShot(0, self, lambda: self.scroll.ensureWidgetVisible(self.speech_pane))
+
+    def choose_speech_model(self):
+        folder = QFileDialog.getExistingDirectory(self, 'Choose extracted trusted Vosk model folder')
+        if folder:
+            self.speech_model.setText(folder)
+
+    def record_speech(self):
+        if self.busy:
+            return
+        if self.speech.active:
+            self.speech.stop()
+            return
+        self.speech_text.clear()
+        self.speech.start(self.speech_source.currentData(), self.speech_model.text())
+
+    def update_speech_controls(self):
+        active = self.speech.active
+        self.voice_button.setText('Stop audio' if active else 'Voice')
+        self.voice_button.setEnabled(not self.busy)
+        self.speech_record.setText('Stop' if active else 'Listen')
+        self.speech_record.setEnabled(not self.busy)
+        for widget in (self.speech_source, self.speech_model, self.speech_browse, self.speech_text):
+            widget.setEnabled(not self.busy and not active)
+        self.ask_speech.setEnabled(bool(self.speech_text.toPlainText().strip()) and not active and not self.busy)
+        self.capture_button.setEnabled(not self.busy and not active)
+        self.prepare_button.setEnabled(not self.busy and not active)
+        self.update_send()
+        self.update_capsule_status()
+
+    def discard_speech(self):
+        self.speech.cancel()
+        self.speech_text.clear()
+        self.speech_note.setText('Local speech session discarded. Nothing was sent.')
+        self.update_speech_controls()
+
+    def speech_failed(self, message):
+        self.speech_note.setText(message)
+        self.update_speech_controls()
+
+    def receive_transcript(self, text):
+        self.speech_text.setPlainText(text)
+        self.speech_note.setText('Transcript is local. Check and edit it; Ask text only sends this text, never audio or a screenshot.')
+        self.update_speech_controls()
+        self.open_voice()
+
+    def ask_transcript(self):
+        if self.busy or self.speech.active:
+            return
+        if not self.key.text():
+            self.settings_toggle.setChecked(True)
+            self.speech_note.setText('Connect the shown model with a session key, then Ask text only.')
+            return
+        try:
+            text = self.speech_text.toPlainText()
+            prepared = prepare_request(text, '', self.mode.currentData())
+        except RequestError as exc:
+            self.speech_note.setText(str(exc))
+            return
+        self.send_prepared(payload(prepared, None, self.provider_choice.currentData()), text.strip())
+        self.speech_pane.hide()
 
     def refresh_screens(self):
         previous = self.screen_choice.currentData()
@@ -454,7 +576,7 @@ class StudyWindow(QMainWindow):
         self.update_window_shape()
 
     def capture_and_ask(self):
-        if self.busy:return
+        if self.busy or self.speech.active:return
         if not self.key.text():
             self.settings_toggle.setChecked(True)
             self.status.setText('Add your session key in connection settings, then Capture & ask.')
@@ -592,7 +714,7 @@ class StudyWindow(QMainWindow):
 
     def update_send(self):
         self.send_button.setEnabled(bool(self.preview.toPlainText()) and bool(self.key.text())
-                                    and self.consent.isChecked() and not self.busy)
+                                    and self.consent.isChecked() and not self.busy and not self.speech.active)
 
     def set_busy(self, busy):
         self.busy = busy
@@ -609,6 +731,7 @@ class StudyWindow(QMainWindow):
         self.cancel_button.setEnabled(busy)
         self.followup_button.setEnabled(not busy and self.last_exchange is not None)
         self.update_send()
+        self.update_speech_controls()
 
     def send_request(self):
         if not self.send_button.isEnabled():
@@ -617,6 +740,8 @@ class StudyWindow(QMainWindow):
         self.send_prepared(body,self.question.toPlainText().strip())
 
     def send_prepared(self, body, question):
+        if self.speech.active:
+            return
         self.answer.clear()
         self.copy_answer_button.setEnabled(False)
         self.sent_question = question
@@ -662,6 +787,7 @@ class StudyWindow(QMainWindow):
         self.status.setText("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
 
     def closeEvent(self, event):
+        self.speech.cancel()
         self.effects_timer.stop()
         self.direct_request = None
         self.capture_timer.stop()
@@ -760,6 +886,8 @@ class StudyWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.update_window_shape()
+        if hasattr(self, 'effects_timer'):
+            self.effects_timer.start(0)
         if hasattr(self, "image_label"):
             self.render_image()
 
@@ -810,6 +938,7 @@ class StudyWindow(QMainWindow):
             self.status.setText("AI answer copied. Verify it before relying on it; clipboard history may retain it.")
 
     def clear_session(self):
+        self.discard_speech()
         self.cancel_request()
         self.sent_question = ""
         self.key.clear()

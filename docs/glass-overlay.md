@@ -1,11 +1,13 @@
-# Glass desktop companion (v0.5)
+# Glass desktop companion (v0.6)
 
-The app opens as a small native glass capsule; **+** expands the same window for
-questions/answers, **…** opens settings. Collapse preserves session state. No second
-app, web runtime or dependency was added. [Native effects and capture exclusion](native-capsule.md)
-replace v0.4's painted-only surface on compatible Windows systems. Unsupported
-platforms keep the painted fallback. Capture exclusion is on by default, with
-Windows read-back status, but cannot guarantee invisibility to every recorder.
+The app opens as a small rounded translucent capsule; **+** expands the same window
+for questions/answers, **…** opens settings, and **Voice** offers explicit local
+microphone/playback transcription. [Speech setup](speech.md). Collapse preserves
+session state. No second app or web runtime was added. The rectangular native
+Acrylic backdrop is disabled; a clean rounded painted surface replaces it.
+[Capsule evidence and capture exclusion](native-capsule.md) describes the remaining
+native-blur limitation and read-back status. Exclusion is on by default but is not
+a guarantee for every recorder. Never infer privacy from appearance.
 
 ## Two deliberate actions
 
@@ -69,8 +71,8 @@ screen transmission was performed during this implementation.
 ```
 
 Demos label their answer synthetic; they do not capture the operator's desktop or
-call a model. Use a new output path: existing artifacts are refused.106 tests include
-8 native-effects/capsule cases plus the earlier overlay and request behavior. The earlier tab assertions now check
+call a model. Use a new output path: existing artifacts are refused.115 tests include
+local speech sessions, capture-affinity/capsule cases and earlier request behavior. The earlier tab assertions now check
 the actual preview drawer and answer visibility, not removed UI plumbing.
 
 For60–90minutes, use a synthetic code display. Predict range(3), inspect display and

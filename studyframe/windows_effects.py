@@ -1,22 +1,12 @@
 """Owned-window Windows effects, with explicit capability/read-back results.
 
-The accent composition export is a guarded, undocumented compatibility API.
-Display affinity is documented, but does not protect against every recorder.
+Native Acrylic is deliberately disabled: its rectangular halo ignores the rounded
+Qt alpha boundary. Display affinity does not protect against every recorder.
 No process-wide setting, hook, or other application's window is modified.
 """
 import ctypes
 import sys
 from dataclasses import dataclass
-
-
-class AccentPolicy(ctypes.Structure):
-    _fields_ = [('state', ctypes.c_int32), ('flags', ctypes.c_uint32),
-                ('tint', ctypes.c_uint32), ('animation', ctypes.c_uint32)]
-
-
-class CompositionData(ctypes.Structure):
-    _fields_ = [('attribute', ctypes.c_int32), ('data', ctypes.c_void_p),
-                ('size', ctypes.c_size_t)]
 
 
 @dataclass(frozen=True)
@@ -35,25 +25,16 @@ def apply_window_effects(hwnd, exclude, *, api=None, build=None):
     """
     if api is None:
         if sys.platform != 'win32':
-            return WindowEffects(False, False, 'Native glass and capture exclusion require Windows.')
+            return WindowEffects(False, False, 'Windows capture exclusion unavailable on this platform.')
         try:
             api = ctypes.WinDLL('user32', use_last_error=True, winmode=0x800)
             build = sys.getwindowsversion().build
-            api.SetWindowCompositionAttribute.argtypes = [ctypes.c_void_p, ctypes.POINTER(CompositionData)]
-            api.SetWindowCompositionAttribute.restype = ctypes.c_int32
-        except (OSError, AttributeError):
-            # A missing compatibility export must not prevent documented privacy.
-            if api is None:
-                return WindowEffects(False, False, 'Windows effects unavailable; overlay is not excluded.')
+        except OSError:
+            return WindowEffects(False, False, 'Windows capture exclusion unavailable; overlay is not excluded.')
+    # Accent/Acrylic ignores the rounded alpha boundary on this supported host.
+    # Do not trade a false glass claim for the rectangular halo the user reported.
     glass = False
-    if build is not None and build >= 17763:
-        try:
-            accent = AccentPolicy(4, 0, 0x60201712, 0)
-            data = CompositionData(19, ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p), ctypes.sizeof(accent))
-            glass = bool(api.SetWindowCompositionAttribute(hwnd, ctypes.byref(data)))
-        except (OSError, AttributeError):
-            pass
-    material = 'Native Acrylic accepted (compatibility API).' if glass else 'Painted fallback; native Acrylic unavailable.'
+    material = 'Rounded translucent surface; native blur disabled to avoid a rectangular halo.'
     if build is None or build < 19041:
         return WindowEffects(glass, False, material + ' Capture exclusion requires Windows 10 build 19041 or newer.')
     try:
