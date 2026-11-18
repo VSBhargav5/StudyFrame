@@ -115,7 +115,9 @@ class SpeechSession(QObject):
                 text = event.get('text', '')
                 if not isinstance(text, str) or len(text) > MAX_TRANSCRIPT:
                     raise ValueError()
-                if kind == 'started':
+                if kind == 'status':
+                    self.status.emit(text)
+                elif kind == 'started':
                     self.status.emit('Recording locally · ' + text + ' · Stop when the question ends.')
                 elif kind == 'transcript' and self.result is None:
                     self.result = text

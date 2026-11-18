@@ -96,3 +96,20 @@ Primary references:
 - [SoundCard WASAPI and known issues](https://soundcard.readthedocs.io/en/latest/)
 - [SoundCard release](https://pypi.org/project/SoundCard/0.4.6/)
 - [Vosk release](https://pypi.org/project/vosk/0.3.45/)
+
+
+## Hardware follow-up on 18 November
+
+An explicitly authorized public-sample playback test found a real startup deadlock:
+the blocking stdin listener thread prevented NumPy native DLL initialization in
+the worker. The worker now polls the parent Windows pipe with PeekNamedPipe and
+reads only when bytes are available. A no-recorder subprocess regression imports
+the native backend and then receives Stop; the earlier thread-based path stalled.
+Fixed stage messages distinguish backend/model/device startup from recording.
+
+After the user unmuted the output, the same approved sample played and was
+recognized through the default playback loopback: the expected opening digits
+were present. Captured audio was not saved or sent to a cloud provider. This
+establishes that one device/path, not all playback devices or microphone quality.
+The muted run correctly returned no speech. Microphone and live AI remain gates.
+[Windows pipe contract](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-peeknamedpipe).

@@ -3,11 +3,12 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import threading
 import tempfile
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, MagicMock, patch
 
-from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer
+from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer, QProcess
 from PySide6.QtWidgets import QApplication
 from studyframe.speech import SpeechSession, validate_speech_setup
 from studyframe.speech_worker import pcm16, choose_device, recognize
@@ -94,6 +95,24 @@ class RealWorkerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls): cls.app = QApplication.instance() or QApplication([])
 
+    @unittest.skipUnless(sys.platform == 'win32' and np is not None, 'Windows speech backend')
+    def test_nonblocking_stop_pipe_does_not_deadlock_native_imports(self):
+        process = QProcess(self.app); loop = QEventLoop(); output = bytearray()
+        code = ('import time; from studyframe.speech_worker import PipeStop; stop=PipeStop(); '
+                'import numpy,soundcard; print("imports-ready",flush=True); '
+                '\nwhile not stop.is_set(): time.sleep(0.01)\nprint("stopped",flush=True)')
+        def read():
+            output.extend(bytes(process.readAllStandardOutput()))
+            if b'imports-ready' in output: process.write(b'stop\n')
+        process.readyReadStandardOutput.connect(read)
+        process.finished.connect(loop.quit)
+        process.setProgram(sys.executable); process.setArguments(['-u', '-c', code]); process.start()
+        timer = QTimer(); timer.setSingleShot(True); timer.timeout.connect(loop.quit); timer.start(8000)
+        loop.exec(); timer.stop(); read()
+        process.kill(); process.waitForFinished(1000); process.deleteLater()
+        self.assertIn(b'imports-ready', output)
+        self.assertIn(b'stopped', output)
+
     def test_actual_worker_invalid_model_exits_without_opening_audio(self):
         session = SpeechSession()
         loop = QEventLoop(); errors = []
@@ -133,6 +152,7 @@ class SessionTests(unittest.TestCase):
         process.setArguments.assert_called_once_with(['-m', 'studyframe.speech_worker', '--source', 'loopback', '--model', 'trusted-model'])
         self.session.stop(); process.write.assert_called_once_with(b'stop\n')
         process.event_line('started', 'Computer playback audio')
+        process.event_line('status', 'Finalizing locally')
         process.event_line('transcript', 'What is a generator?')
         process.finished.emit(0, 0)
         self.text.assert_called_once_with('What is a generator?')

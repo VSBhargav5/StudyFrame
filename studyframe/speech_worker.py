@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import sys
-import threading
 import time
 from pathlib import Path
 
@@ -15,6 +14,36 @@ RATE = 16000
 CHUNK = 1600
 MAX_SECONDS = 30
 MAX_TEXT = 4000
+
+
+class PipeStop:
+    """Poll the parent's Windows pipe without a blocking CRT reader thread.
+
+    Blocking os.read on another thread can deadlock native DLL initialization.
+    PeekNamedPipe prevents entering that read until bytes are already available.
+    """
+    def __init__(self):
+        import ctypes
+        import msvcrt
+        self.ctypes = ctypes
+        self.fd = sys.stdin.fileno()
+        self.handle = msvcrt.get_osfhandle(self.fd)
+        self.kernel = ctypes.WinDLL('kernel32', use_last_error=True, winmode=0x800)
+        self.kernel.PeekNamedPipe.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32,
+                                              ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
+        self.kernel.PeekNamedPipe.restype = ctypes.c_int32
+        self.stopped = False
+
+    def is_set(self):
+        if self.stopped:
+            return True
+        available = self.ctypes.c_uint32()
+        if not self.kernel.PeekNamedPipe(self.handle, None, 0, None, self.ctypes.byref(available), None):
+            self.stopped = True  # Closed/invalid parent pipe fails closed.
+        elif available.value:
+            os.read(self.fd, min(available.value, 16))
+            self.stopped = True
+        return self.stopped
 
 
 def pcm16(block):
@@ -83,24 +112,24 @@ def main():
     args = parser.parse_args()
     def emit(kind, text):
         print(json.dumps({'type': kind, 'text': text}), flush=True)
-    stop = threading.Event()
-    def command():
-        # Parent EOF or any command stops recording; no commands execute code.
-        os.read(sys.stdin.fileno(), 16)
-        stop.set()
-    threading.Thread(target=command, daemon=True).start()
     try:
         if sys.platform != 'win32' or not Path(args.model).is_dir():
             raise ValueError('Unsupported setup')
+        stop = PipeStop()
+        emit('status', 'Preparing local Windows audio backend…')
         import soundcard as sc
         from vosk import Model, KaldiRecognizer, SetLogLevel
         SetLogLevel(-1)
+        emit('status', 'Loading the local speech model…')
         model = Model(model_path=args.model)  # Explicit local path; never Model(lang=...).
         recognizer = KaldiRecognizer(model, RATE)
         if stop.is_set():
             emit('transcript', '')
             return 0
-        text = recognize(choose_device(sc, args.source), recognizer, stop, emit)
+        emit('status', 'Resolving the selected Windows audio device…')
+        device = choose_device(sc, args.source)
+        emit('status', 'Opening the selected audio stream…')
+        text = recognize(device, recognizer, stop, emit)
         emit('transcript', text)
         return 0
     except Exception:
