@@ -57,6 +57,7 @@ class WorkerContractTests(unittest.TestCase):
         recognizer.FinalResult.return_value = '{"text":"range stop"}'
         emit = Mock()
         self.assertEqual(recognize(device, recognizer, stop, emit), 'why does range stop')
+        emit.assert_any_call('level', '0')
         device.recorder.assert_called_once_with(samplerate=16000, channels=[0, 0], blocksize=6400)
         device.recorder.return_value.__exit__.assert_called_once()
         stop.set(); device.recorder.reset_mock()
@@ -175,12 +176,23 @@ class SessionTests(unittest.TestCase):
                 self.text.assert_not_called(); self.assertFalse(self.session.active)
                 self.assertNotIn('private/device/path', str(self.error.call_args))
 
+    def test_signal_level_distinguishes_silence_from_unrecognized_audio(self):
+        for level, message in ((0, 'No input signal'), (60, 'Audio was detected')):
+            process = self.start()
+            process.event_line('level', str(level))
+            process.event_line('transcript', '')
+            process.finished.emit(0,0)
+            self.assertIn(message, self.error.call_args.args[0])
+        process = self.start(); process.event_line('level', '101')
+        self.assertFalse(self.session.active)
+
 
 class FakeSpeech(QObject):
     changed = Signal(bool)
     status = Signal(str)
     transcript = Signal(str)
     failed = Signal(str)
+    level = Signal(int)
     active = False
     def start(self, source, model): self.active = True; self.source = source; self.changed.emit(True)
     def stop(self): self.active = False; self.changed.emit(False)
@@ -204,11 +216,13 @@ class VoiceUITests(unittest.TestCase):
         for source in ('loopback', 'microphone'):
             self.window.speech_source.setCurrentIndex(self.window.speech_source.findData(source))
             self.window.speech_record.click(); self.assertEqual(self.speech.source, source)
+            self.speech.level.emit(55); self.assertEqual(self.window.speech_level.value(), 55)
             self.assertFalse(self.window.capture_button.isEnabled())
             self.assertFalse(self.window.speech_source.isEnabled())
             self.window.voice_button.click(); self.assertFalse(self.speech.active)
         self.window.speech_record.click(); self.window.clear_session()
         self.assertFalse(self.speech.active); self.assertFalse(self.window.speech_text.toPlainText())
+        self.assertEqual(self.window.speech_level.value(), 0)
         self.manager.post.assert_not_called()
     def test_reviewed_transcript_sends_text_only_even_with_existing_image_notes_and_history(self):
         from PySide6.QtCore import Qt, QRect

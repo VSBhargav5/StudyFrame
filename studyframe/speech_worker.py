@@ -98,6 +98,9 @@ def recognize(device, recognizer, stop, emit, *, clock=time.monotonic):
         while not stop.is_set() and clock() < deadline and frames < RATE * MAX_SECONDS:
             block = recorder.record(numframes=CHUNK)
             encoded = pcm16(block)
+            import numpy as np
+            samples = np.frombuffer(encoded, dtype='<i2').astype(np.int32)
+            emit('level', str(min(100, round(int(np.abs(samples).max()) * 100 / 32767))))
             frames += len(encoded) // 2
             if recognizer.AcceptWaveform(encoded):
                 collect(recognizer.Result())

@@ -113,3 +113,11 @@ were present. Captured audio was not saved or sent to a cloud provider. This
 establishes that one device/path, not all playback devices or microphone quality.
 The muted run correctly returned no speech. Microphone and live AI remain gates.
 [Windows pipe contract](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-peeknamedpipe).
+
+
+The voice panel now shows the selected source's live signal level while recording.
+A flat meter plus an empty transcript reports no input signal and suggests checking
+the selected output, playback and mute/volume settings. Detected audio without a
+transcript instead suggests checking speech/model language. Level values are bounded
+0–100 and stay local; no raw waveform is saved or sent. This follows the observed
+muted-output hardware test rather than assuming all empty recognition is one error.

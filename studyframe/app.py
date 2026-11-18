@@ -197,6 +197,14 @@ class StudyWindow(QMainWindow):
         self.speech_discard = QPushButton('Discard')
         for button in (self.speech_browse, self.speech_record, self.speech_discard): actions.addWidget(button)
         voice.addLayout(actions)
+        self.speech_level = QProgressBar()
+        self.speech_level.setRange(0,100)
+        self.speech_level.setValue(0)
+        self.speech_level.setTextVisible(False)
+        self.speech_level.setAccessibleName('Selected audio source signal level')
+        self.speech_level.setToolTip('Live signal level for the selected source. A flat meter can indicate muted or missing audio.')
+        self.speech_level.setFixedHeight(5)
+        voice.addWidget(self.speech_level)
         self.speech_note = QLabel('Listen records up to 30 seconds from the selected source. Stop finishes early. '
                                   'Audio stays local; review/edit the transcript, then Ask text only. '
                                   'Optional setup: docs/speech.md.')
@@ -405,6 +413,7 @@ class StudyWindow(QMainWindow):
         self.speech.status.connect(self.speech_note.setText)
         self.speech.failed.connect(self.speech_failed)
         self.speech.transcript.connect(self.receive_transcript)
+        self.speech.level.connect(self.speech_level.setValue)
         self.provider_changed()
         if preferences is not None:
             saved = preferences.load()
@@ -490,6 +499,7 @@ class StudyWindow(QMainWindow):
             self.speech.stop()
             return
         self.speech_text.clear()
+        self.speech_level.setValue(0)
         self.speech.start(self.speech_source.currentData(), self.speech_model.text())
 
     def update_speech_controls(self):
@@ -509,6 +519,7 @@ class StudyWindow(QMainWindow):
     def discard_speech(self):
         self.speech.cancel()
         self.speech_text.clear()
+        self.speech_level.setValue(0)
         self.speech_note.setText('Local speech session discarded. Nothing was sent.')
         self.update_speech_controls()
 

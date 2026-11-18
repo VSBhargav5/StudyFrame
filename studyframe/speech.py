@@ -26,6 +26,7 @@ class SpeechSession(QObject):
     status = Signal(str)
     transcript = Signal(str)
     failed = Signal(str)
+    level = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -34,6 +35,7 @@ class SpeechSession(QObject):
         self.total = 0
         self.result = None
         self.problem = None
+        self.peak = 0
         self.deadline = QTimer(self)
         self.deadline.setSingleShot(True)
         self.deadline.timeout.connect(self.timeout)
@@ -53,6 +55,7 @@ class SpeechSession(QObject):
         process = QProcess(self)
         self.process = process
         self.buffer.clear(); self.total = 0; self.result = None; self.problem = None
+        self.peak = 0
         executable = Path(sys.executable)
         # pythonw can have no standard streams; the worker needs private pipes.
         if executable.name.lower() == 'pythonw.exe':
@@ -115,7 +118,12 @@ class SpeechSession(QObject):
                 text = event.get('text', '')
                 if not isinstance(text, str) or len(text) > MAX_TRANSCRIPT:
                     raise ValueError()
-                if kind == 'status':
+                if kind == 'level':
+                    if not text.isascii() or not text.isdigit() or len(text) > 3 or int(text) > 100:
+                        raise ValueError()
+                    self.peak = max(self.peak, int(text))
+                    self.level.emit(int(text))
+                elif kind == 'status':
                     self.status.emit(text)
                 elif kind == 'started':
                     self.status.emit('Recording locally · ' + text + ' · Stop when the question ends.')
@@ -146,6 +154,7 @@ class SpeechSession(QObject):
         if code != 0 or problem or text is None:
             self.failed.emit(problem or 'Local speech stopped unexpectedly. Nothing was sent.')
         elif not text.strip():
-            self.failed.emit('No speech recognized. Check the selected source and try again.')
+            self.failed.emit('No input signal detected. Check the selected device, playback and mute/volume settings.'
+                             if self.peak == 0 else 'Audio was detected but no speech recognized. Check the model/language and try again.')
         else:
             self.transcript.emit(text)
