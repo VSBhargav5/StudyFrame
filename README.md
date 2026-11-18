@@ -2,12 +2,13 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.8.0: rounded native frost, screen-and-voice companion.** StudyFrame opens
+**v0.8.1: readable dark frost, screen-and-voice companion.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Listen, Stop, review/edit the local
 transcript, then **Ask text only** for a text answer. No raw audio or old screenshot
 is sent by that action. [Speech setup and workflow](docs/speech.md).
 
+The dark material and brighter secondary text remain readable over light windows.
 On Windows 11, the capsule uses a real compositor host-backdrop brush clipped to
 its rounded shape, behind the existing Qt controls. No rectangular Acrylic halo
 or background screenshot is used to simulate blur. Unsupported/disabled hosts

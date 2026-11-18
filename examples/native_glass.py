@@ -16,8 +16,13 @@ from studyframe.app import StudyWindow
 
 
 class Backdrop(QWidget):
+    background = 'stripes'
+
     def paintEvent(self, event):
         painter = QPainter(self)
+        if self.background != 'stripes':
+            painter.fillRect(self.rect(), QColor('#ffffff' if self.background == 'light' else '#080c13'))
+            return
         painter.fillRect(self.rect(), QColor('#2462e1'))
         painter.fillRect(self.width() // 2, 0, self.width(), self.height(), QColor('#f3d237'))
         for y in range(0, self.height(), 32):
@@ -27,6 +32,7 @@ class Backdrop(QWidget):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--background', choices=('stripes', 'light', 'dark'), default='stripes')
     args = parser.parse_args()
     if sys.platform != 'win32': parser.error('This check requires native Windows Qt.')
     app = QApplication([])
@@ -36,6 +42,7 @@ def main():
         parser.error('Requires at least 750 × 740 logical pixels for a bounded synthetic check.')
     args.output.mkdir(parents=True, exist_ok=False)
     backdrop = Backdrop()
+    backdrop.background = args.background
     backdrop.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
     backdrop.resize(min(1100, available.width()), min(850, available.height()))
     backdrop.move(available.center() - backdrop.rect().center())
@@ -103,7 +110,7 @@ def main():
         points = [(x if left else shown.width()-1-x, y if top else shown.height()-1-y)
                   for x in range(3) for y in range(3) for left in (True, False) for top in (True, False)]
         unchanged = sum(shown.pixelColor(x,y) == hidden.pixelColor(x,y) for x,y in points)
-        report = {'windows_build': sys.getwindowsversion().build, 'observations': observations,
+        report = {'windows_build': sys.getwindowsversion().build, 'background': args.background, 'observations': observations,
                   'outside_corner_pixels_unchanged': unchanged, 'outside_corner_pixels_checked': len(points),
                   'excluded_matches_hidden_fixture': hidden == captures['glass-baseline']}
         (args.output / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
@@ -111,6 +118,7 @@ def main():
         window.close(); backdrop.close(); app.quit()
 
     window.hide()
+    backdrop.raise_(); backdrop.activateWindow()
     QTimer.singleShot(700, baseline)
     QTimer.singleShot(10000, app.quit)
     app.exec()

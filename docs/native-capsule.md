@@ -92,3 +92,26 @@ Primary contracts: [host backdrop brush](https://learn.microsoft.com/en-us/uwp/a
 [desktop composition interop](https://pywinrt.readthedocs.io/en/latest/api/windows/ui/composition/interop/),
 [dispatcher lifecycle](https://pywinrt.readthedocs.io/en/latest/api/windows/system/interop/),
 [freezing PyWinRT tables](https://pywinrt.readthedocs.io/en/latest/freezing/).
+
+
+## Readability over light applications (v0.8.1)
+
+A user photo showed that the first native material washed out over a light window:
+frost was present, but the tint and secondary text did not provide enough contrast.
+The corrected material keeps a dark minimum tint, limits the pale glow, and raises
+secondary/placeholder/action text contrast and size. It still uses the native
+backdrop; no desktop sampling, automatic theme inference or image upload was added.
+A rendered regression checks sampled interior material pixels against actual
+widget palette colors on pure white and black backgrounds, in native and fallback
+paint modes, requiring at least 4.5:1 for the checked enabled text colors. This is
+a targeted check, not an accessibility certification for the whole app.
+
+Reproduce actual native visual checks without opening personal windows:
+
+```powershell
+.venv/Scripts/python.exe -m examples.native_glass --background light --output out/light-check-new
+.venv/Scripts/python.exe -m examples.native_glass --background dark --output out/dark-check-new
+```
+
+These checks retain the corner and hidden-baseline exclusion comparisons. The
+visual tradeoff is less desktop show-through in exchange for stable legibility.
