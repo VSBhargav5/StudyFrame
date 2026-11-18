@@ -3,11 +3,12 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import threading
 import tempfile
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, MagicMock, patch
 
-from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer
+from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer, QProcess
 from PySide6.QtWidgets import QApplication
 from studyframe.speech import SpeechSession, validate_speech_setup
 from studyframe.speech_worker import pcm16, choose_device, recognize
@@ -56,6 +57,7 @@ class WorkerContractTests(unittest.TestCase):
         recognizer.FinalResult.return_value = '{"text":"range stop"}'
         emit = Mock()
         self.assertEqual(recognize(device, recognizer, stop, emit), 'why does range stop')
+        emit.assert_any_call('level', '0')
         device.recorder.assert_called_once_with(samplerate=16000, channels=[0, 0], blocksize=6400)
         device.recorder.return_value.__exit__.assert_called_once()
         stop.set(); device.recorder.reset_mock()
@@ -93,6 +95,24 @@ class Process(QObject):
 class RealWorkerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls): cls.app = QApplication.instance() or QApplication([])
+
+    @unittest.skipUnless(sys.platform == 'win32' and np is not None, 'Windows speech backend')
+    def test_nonblocking_stop_pipe_does_not_deadlock_native_imports(self):
+        process = QProcess(self.app); loop = QEventLoop(); output = bytearray()
+        code = ('import time; from studyframe.speech_worker import PipeStop; stop=PipeStop(); '
+                'import numpy,soundcard; print("imports-ready",flush=True); '
+                '\nwhile not stop.is_set(): time.sleep(0.01)\nprint("stopped",flush=True)')
+        def read():
+            output.extend(bytes(process.readAllStandardOutput()))
+            if b'imports-ready' in output: process.write(b'stop\n')
+        process.readyReadStandardOutput.connect(read)
+        process.finished.connect(loop.quit)
+        process.setProgram(sys.executable); process.setArguments(['-u', '-c', code]); process.start()
+        timer = QTimer(); timer.setSingleShot(True); timer.timeout.connect(loop.quit); timer.start(8000)
+        loop.exec(); timer.stop(); read()
+        process.kill(); process.waitForFinished(1000); process.deleteLater()
+        self.assertIn(b'imports-ready', output)
+        self.assertIn(b'stopped', output)
 
     def test_actual_worker_invalid_model_exits_without_opening_audio(self):
         session = SpeechSession()
@@ -133,6 +153,7 @@ class SessionTests(unittest.TestCase):
         process.setArguments.assert_called_once_with(['-m', 'studyframe.speech_worker', '--source', 'loopback', '--model', 'trusted-model'])
         self.session.stop(); process.write.assert_called_once_with(b'stop\n')
         process.event_line('started', 'Computer playback audio')
+        process.event_line('status', 'Finalizing locally')
         process.event_line('transcript', 'What is a generator?')
         process.finished.emit(0, 0)
         self.text.assert_called_once_with('What is a generator?')
@@ -144,6 +165,12 @@ class SessionTests(unittest.TestCase):
         self.assertIs(self.session.process, new); self.text.assert_not_called()
         self.session.timeout(); self.assertFalse(self.session.active)
         new.kill.assert_called_once(); self.error.assert_called_once()
+
+    def test_frozen_worker_launches_same_executable_with_explicit_worker_dispatch(self):
+        with patch.object(sys,'frozen',True,create=True):
+            process = self.start()
+        self.assertEqual(process.setArguments.call_args.args[0],
+                         ['--speech-worker','--source','loopback','--model','trusted-model'])
     def test_invalid_oversized_empty_and_failed_worker_never_yield_transcript(self):
         for output, code in ((b'not-json\n', 0), (b'x'*65537, 0),
                              (b'{"type":"transcript","text":""}\n', 0),
@@ -155,12 +182,23 @@ class SessionTests(unittest.TestCase):
                 self.text.assert_not_called(); self.assertFalse(self.session.active)
                 self.assertNotIn('private/device/path', str(self.error.call_args))
 
+    def test_signal_level_distinguishes_silence_from_unrecognized_audio(self):
+        for level, message in ((0, 'No input signal'), (60, 'Audio was detected')):
+            process = self.start()
+            process.event_line('level', str(level))
+            process.event_line('transcript', '')
+            process.finished.emit(0,0)
+            self.assertIn(message, self.error.call_args.args[0])
+        process = self.start(); process.event_line('level', '101')
+        self.assertFalse(self.session.active)
+
 
 class FakeSpeech(QObject):
     changed = Signal(bool)
     status = Signal(str)
     transcript = Signal(str)
     failed = Signal(str)
+    level = Signal(int)
     active = False
     def start(self, source, model): self.active = True; self.source = source; self.changed.emit(True)
     def stop(self): self.active = False; self.changed.emit(False)
@@ -184,11 +222,13 @@ class VoiceUITests(unittest.TestCase):
         for source in ('loopback', 'microphone'):
             self.window.speech_source.setCurrentIndex(self.window.speech_source.findData(source))
             self.window.speech_record.click(); self.assertEqual(self.speech.source, source)
+            self.speech.level.emit(55); self.assertEqual(self.window.speech_level.value(), 55)
             self.assertFalse(self.window.capture_button.isEnabled())
             self.assertFalse(self.window.speech_source.isEnabled())
             self.window.voice_button.click(); self.assertFalse(self.speech.active)
         self.window.speech_record.click(); self.window.clear_session()
         self.assertFalse(self.speech.active); self.assertFalse(self.window.speech_text.toPlainText())
+        self.assertEqual(self.window.speech_level.value(), 0)
         self.manager.post.assert_not_called()
     def test_reviewed_transcript_sends_text_only_even_with_existing_image_notes_and_history(self):
         from PySide6.QtCore import Qt, QRect

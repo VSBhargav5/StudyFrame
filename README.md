@@ -2,7 +2,7 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.6.0: clean rounded capsule and local voice questions.** StudyFrame opens
+**v0.7.1: standalone Windows screen-and-voice companion.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Listen, Stop, review/edit the local
 transcript, then **Ask text only** for a text answer. No raw audio or old screenshot
@@ -22,12 +22,19 @@ OpenRouter free routing is the default; paid OpenAI stays separately labelled.
 Transcription is offline and keyless, using optional Vosk/SoundCard dependencies
 and a trusted local model. A model-provider key is needed only for AI answers.
 
-Offline regressions and a public Vosk sample verified the local recognition path;
-recognition made errors on later sample digits. Real microphone/playback devices,
-live AI quality and personal usefulness remain unverified. No personal audio was
+An authorized real default-playback loopback test recognized the public sample’s opening digits after unmuting. Offline regressions also verify the recognition path;
+recognition made errors on later sample digits. Microphone quality, other playback devices, live AI quality and personal usefulness remain unverified. No personal audio was
 recorded or live model call made. RoleWeave remains paused.
 
-## Run on Windows
+## Open the Windows portable app
+
+Unzip the complete portable folder and open **StudyFrame.exe**. Keep `_internal`
+next to it. Python is not needed for that build. The local development package
+includes the small English speech model; builds without it let you choose a local
+model folder. Setup choices persist locally; API keys and study content do not.
+See [Windows release and acceptance checklist](docs/windows-release.md).
+
+## Run from source on Windows
 
 Python 3.11 or newer is required. From this repository in PowerShell:
 

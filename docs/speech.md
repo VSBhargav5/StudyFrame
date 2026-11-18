@@ -36,8 +36,8 @@ The small US-English `vosk-model-small-en-us-0.15` is listed as 40 MB, Apache 2.
 Indian-English/Hindi and other models are separate choices with their own licenses
 and accuracy. Put the extracted folder in `models/` in the checkout, or choose its
 folder with **Model folder…**. Select the folder containing `am/` and `conf/`, not
-the ZIP or its parent. Model choice is session-local. An installed copy launched
-elsewhere may need you to choose the folder. The selected model determines language.
+the ZIP or its parent. Model folder, audio source, provider and pinning are remembered in local setup preferences. An installed copy launched
+elsewhere may need you to choose the folder. Use Save setup in connection settings or close normally to save them. Keys, questions, transcripts and approval are never saved; capture exclusion starts on again. The selected model determines language.
 
 The current local checkout already has the optional dependencies and that small
 English model installed for development verification. They are not bundled into
@@ -96,3 +96,28 @@ Primary references:
 - [SoundCard WASAPI and known issues](https://soundcard.readthedocs.io/en/latest/)
 - [SoundCard release](https://pypi.org/project/SoundCard/0.4.6/)
 - [Vosk release](https://pypi.org/project/vosk/0.3.45/)
+
+
+## Hardware follow-up on 18 November
+
+An explicitly authorized public-sample playback test found a real startup deadlock:
+the blocking stdin listener thread prevented NumPy native DLL initialization in
+the worker. The worker now polls the parent Windows pipe with PeekNamedPipe and
+reads only when bytes are available. A no-recorder subprocess regression imports
+the native backend and then receives Stop; the earlier thread-based path stalled.
+Fixed stage messages distinguish backend/model/device startup from recording.
+
+After the user unmuted the output, the same approved sample played and was
+recognized through the default playback loopback: the expected opening digits
+were present. Captured audio was not saved or sent to a cloud provider. This
+establishes that one device/path, not all playback devices or microphone quality.
+The muted run correctly returned no speech. Microphone and live AI remain gates.
+[Windows pipe contract](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-peeknamedpipe).
+
+
+The voice panel now shows the selected source's live signal level while recording.
+A flat meter plus an empty transcript reports no input signal and suggests checking
+the selected output, playback and mute/volume settings. Detected audio without a
+transcript instead suggests checking speech/model language. Level values are bounded
+0–100 and stay local; no raw waveform is saved or sent. This follows the observed
+muted-output hardware test rather than assuming all empty recognition is one error.

@@ -20,13 +20,16 @@ from studyframe.capture import capture_screen
 from studyframe.glass import GlassPanel, DragBar
 from studyframe.windows_effects import apply_window_effects, WindowEffects
 from studyframe.speech import SpeechSession
+from studyframe.preferences import Preferences
+from studyframe.launcher import default_model
 
 
 class StudyWindow(QMainWindow):
-    def __init__(self, provider=None, *, start_collapsed=False, speech=None):
+    def __init__(self, provider=None, *, start_collapsed=False, speech=None, preferences=None):
         super().__init__()
         self.provider = provider or StudyProvider(self)
         self.speech = speech or SpeechSession(self)
+        self.preferences = preferences
         self.busy = False
         self.pending_screen = None
         self.capture_timer = QTimer(self)
@@ -185,7 +188,7 @@ class StudyWindow(QMainWindow):
         self.speech_source.addItem('Microphone · default input device', 'microphone')
         self.speech_source.setAccessibleName('Speech audio source')
         voice.addWidget(self.speech_source)
-        self.speech_model = QLineEdit(str(Path(__file__).resolve().parents[1] / 'models/vosk-model-small-en-us-0.15'))
+        self.speech_model = QLineEdit(str(default_model()))
         self.speech_model.setAccessibleName('Local Vosk model folder')
         self.speech_model.setPlaceholderText('Choose an extracted Vosk model folder')
         voice.addWidget(self.speech_model)
@@ -195,6 +198,14 @@ class StudyWindow(QMainWindow):
         self.speech_discard = QPushButton('Discard')
         for button in (self.speech_browse, self.speech_record, self.speech_discard): actions.addWidget(button)
         voice.addLayout(actions)
+        self.speech_level = QProgressBar()
+        self.speech_level.setRange(0,100)
+        self.speech_level.setValue(0)
+        self.speech_level.setTextVisible(False)
+        self.speech_level.setAccessibleName('Selected audio source signal level')
+        self.speech_level.setToolTip('Live signal level for the selected source. A flat meter can indicate muted or missing audio.')
+        self.speech_level.setFixedHeight(5)
+        voice.addWidget(self.speech_level)
         self.speech_note = QLabel('Listen records up to 30 seconds from the selected source. Stop finishes early. '
                                   'Audio stays local; review/edit the transcript, then Ask text only. '
                                   'Optional setup: docs/speech.md.')
@@ -246,6 +257,14 @@ class StudyWindow(QMainWindow):
         self.effects_info.setObjectName('muted')
         self.effects_info.setWordWrap(True)
         settings.addWidget(self.effects_info)
+        self.save_setup_button = QPushButton('Save setup')
+        self.save_setup_button.setEnabled(preferences is not None)
+        settings.addWidget(self.save_setup_button)
+        self.setup_note = QLabel('Only provider, audio source, model folder and pinning are saved locally. '
+                                'Keys, questions and transcripts are never saved. Capture exclusion starts on each time.')
+        self.setup_note.setObjectName('muted')
+        self.setup_note.setWordWrap(True)
+        settings.addWidget(self.setup_note)
         self.settings_pane.hide()
         content.addWidget(self.settings_pane)
 
@@ -384,6 +403,7 @@ class StudyWindow(QMainWindow):
         self.provider.failed.connect(self.receive_error)
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
+        self.save_setup_button.clicked.connect(self.save_setup)
         self.voice_button.clicked.connect(self.open_voice)
         self.speech_browse.clicked.connect(self.choose_speech_model)
         self.speech_record.clicked.connect(self.record_speech)
@@ -394,10 +414,34 @@ class StudyWindow(QMainWindow):
         self.speech.status.connect(self.speech_note.setText)
         self.speech.failed.connect(self.speech_failed)
         self.speech.transcript.connect(self.receive_transcript)
+        self.speech.level.connect(self.speech_level.setValue)
         self.provider_changed()
+        if preferences is not None:
+            saved = preferences.load()
+            if saved:
+                self.provider_choice.setCurrentIndex(self.provider_choice.findData(saved['provider']))
+                self.speech_source.setCurrentIndex(self.speech_source.findData(saved['source']))
+                self.speech_model.setText(saved['model'])
+                self.pin.blockSignals(True)
+                self.pin.setChecked(saved['pin'])
+                self.pin.blockSignals(False)
+                self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, saved['pin'])
+            if preferences.warning:
+                self.setup_note.setText(preferences.warning)
         self.status.setText('Connect a model, then Capture & ask.')
         if start_collapsed:
             self.collapse_button.setChecked(True)
+
+    def save_setup(self):
+        if self.preferences is None:
+            return
+        try:
+            self.preferences.save(self.provider_choice.currentData(), self.speech_source.currentData(),
+                                  self.speech_model.text(), self.pin.isChecked())
+        except (OSError, ValueError):
+            self.setup_note.setText('Setup could not be saved. Existing saved setup was preserved; session still works.')
+        else:
+            self.setup_note.setText('Setup saved locally. Keys, questions, images and transcripts were not saved.')
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -456,6 +500,7 @@ class StudyWindow(QMainWindow):
             self.speech.stop()
             return
         self.speech_text.clear()
+        self.speech_level.setValue(0)
         self.speech.start(self.speech_source.currentData(), self.speech_model.text())
 
     def update_speech_controls(self):
@@ -475,6 +520,7 @@ class StudyWindow(QMainWindow):
     def discard_speech(self):
         self.speech.cancel()
         self.speech_text.clear()
+        self.speech_level.setValue(0)
         self.speech_note.setText('Local speech session discarded. Nothing was sent.')
         self.update_speech_controls()
 
@@ -787,6 +833,7 @@ class StudyWindow(QMainWindow):
         self.status.setText("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
 
     def closeEvent(self, event):
+        self.save_setup()
         self.speech.cancel()
         self.effects_timer.stop()
         self.direct_request = None
@@ -953,6 +1000,6 @@ class StudyWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("StudyFrame")
-    window = StudyWindow(start_collapsed=True)
+    window = StudyWindow(start_collapsed=True, preferences=Preferences.default())
     window.show()
     return app.exec()
