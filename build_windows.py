@@ -26,6 +26,7 @@ def build_environment():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model', type=Path, help='Optional trusted vosk-model-small-en-us-0.15 folder to bundle')
+    parser.add_argument('--indian-model', type=Path, help='Optional trusted vosk-model-small-en-in-0.4 folder to bundle')
     args = parser.parse_args()
     if sys.platform != 'win32': parser.error('Build on Windows x64.')
     repo = Path(__file__).resolve().parent
@@ -39,6 +40,12 @@ def main():
             parser.error('Bundle only the trusted extracted small US-English model; other models can be selected in the app.')
         if any(p.is_symlink() or getattr(p.lstat(),'st_file_attributes',0) & 1024 for p in args.model.rglob('*')):
             parser.error('Model folder contains a link/reparse point; refusing to bundle it.')
+    if args.indian_model:
+        args.indian_model=args.indian_model.resolve()
+        if args.indian_model.name!='vosk-model-small-en-in-0.4' or not (args.indian_model/'am/final.mdl').is_file():
+            parser.error('Choose the trusted small Indian-English0.4 model folder.')
+        if any(p.is_symlink() or getattr(p.lstat(),'st_file_attributes',0)&1024 for p in args.indian_model.rglob('*')):
+            parser.error('Indian model contains a link/reparse point.')
     stage = out / ('.windows-build-' + uuid.uuid4().hex)
     stage.mkdir()
     subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--windowed','--onedir',
@@ -73,12 +80,14 @@ def main():
     if python_license.is_file(): shutil.copyfile(python_license,bundle/'licenses/Python-LICENSE.txt')
     if args.model:
         shutil.copytree(args.model,bundle/'models/vosk-model-small-en-us-0.15')
+    if args.indian_model:
+        shutil.copytree(args.indian_model,bundle/'models/vosk-model-small-en-in-0.4')
     (bundle/'THIRD_PARTY_NOTICES.txt').write_text(
         'StudyFrame uses unchanged dynamically linked Qt/PySide (LGPL/GPL/commercial options), '
         'Python, NumPy, Vosk, SoundCard and their dependencies. See licenses/ for installed license/notice texts.\n'
         'Qt/PySide source and replacement information: https://download.qt.io/official_releases/QtForPython/\n'
         'This portable folder permits replacement of its dynamic Qt libraries. No changes to Qt sources are included.\n'
-        'Optional model: Alpha Cephei small US English 0.15, Apache-2.0 as listed at https://alphacephei.com/vosk/models .\n'
+        'Optional models: Alpha Cephei small US English0.15 and Indian English0.4, Apache-2.0 as listed at https://alphacephei.com/vosk/models .\n'
         'Do not treat package hashes as signing/authenticity or proof of model accuracy.\n',encoding='utf-8')
     report = bundle/'runtime-check.json'
     command = [str(bundle/'StudyFrame.exe'),'--self-test','--output',str(report)]

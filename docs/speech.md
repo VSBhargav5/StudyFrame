@@ -127,3 +127,24 @@ the selected output, playback and mute/volume settings. Detected audio without a
 transcript instead suggests checking speech/model language. Level values are bounded
 0–100 and stay local; no raw waveform is saved or sent. This follows the observed
 muted-output hardware test rather than assuming all empty recognition is one error.
+
+
+## Indian-English option
+
+The local v0.11 portable includes both small US-English0.15 and Indian-English0.4
+models. In Voice choose Try Indian English, Prepare audio, wait Ready, then Listen
+and speak after Listening now. Changing a model does not start recording. A saved
+model folder is respected until you explicitly select a preset; Save setup retains
+that folder. Packages without weights explain a missing preset and keep the current
+folder; install an extracted trusted model yourself.
+
+[Official Vosk list](https://alphacephei.com/vosk/models) lists the36MB Indian
+model under Apache2.0 and a49.05% word-error rate on NPTEL Pure. That benchmark is
+not your voice and does not promise accurate coding vocabulary or mixed languages.
+We have verified loading/readiness, not improved personal transcription. Review/edit
+all transcripts. No audio is sent to a provider for speech recognition.
+
+Local model archive SHA25620663dcac4d5cb783a579c54d98339344a688e4ec6e1b4a4b059fd1235454cc7;
+56,700,192 extracted bytes. Download from the official HTTPS source, safe prefix/
+size/no-link extraction. This hash records bytes, not an independent authenticity
+signature. No recording was made to test it in this iteration.
