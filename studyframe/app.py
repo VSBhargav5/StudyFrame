@@ -119,8 +119,10 @@ class StudyWindow(QMainWindow):
         self.screen_choice.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.screen_choice.setMinimumContentsLength(6)
         self.refresh_screens()
-        self.provider_badge = QLabel('FREE ROUTE')
+        self.provider_badge = QPushButton('Connect · free')
         self.provider_badge.setObjectName('routeBadge')
+        self.provider_badge.setAccessibleName('Open model connection settings')
+        self.provider_badge.setToolTip('Enter a session key. Entering a key does not send a test request.')
         source_row.addWidget(self.screen_choice,1)
         source_row.addWidget(self.provider_badge)
         content.addLayout(source_row)
@@ -245,6 +247,9 @@ class StudyWindow(QMainWindow):
         self.key = QLineEdit()
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         settings.addWidget(self.key)
+        self.connection_done = QPushButton('Use this session key')
+        self.connection_done.setEnabled(False)
+        settings.addWidget(self.connection_done)
         self.disclosure = QLabel()
         self.disclosure.setWordWrap(True)
         self.disclosure.setObjectName('muted')
@@ -269,7 +274,8 @@ class StudyWindow(QMainWindow):
         self.setup_note.setWordWrap(True)
         settings.addWidget(self.setup_note)
         self.settings_pane.hide()
-        content.addWidget(self.settings_pane)
+        # Connection is a first-use task, not a drawer below a full answer panel.
+        content.insertWidget(0, self.settings_pane)
 
         self.review_pane = QFrame()
         self.review_pane.setObjectName('drawer')
@@ -350,7 +356,7 @@ class StudyWindow(QMainWindow):
             QLabel#brandMark { border-radius: 10px; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #b6a0ff,stop:1 #79d6e2); color: #152338; font-size: 17px; font-weight: 800; }
             QLabel#muted { color: #c3cfe3; font-size: 12px; }
             QLabel#eyebrow { color: #c3cfe3; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
-            QLabel#routeBadge { color: #93e5ce; font-size: 10px; font-weight: 600; background: rgba(90,220,180,18); border: 1px solid rgba(115,231,194,35); border-radius: 9px; padding: 5px 9px; }
+            QPushButton#routeBadge { color: #93e5ce; font-size: 11px; font-weight: 600; background: rgba(90,220,180,18); border: 1px solid rgba(115,231,194,35); border-radius: 9px; padding: 5px 9px; }
             QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,165); color: #e8edf8; placeholder-text-color: #c3cfe3; border: 1px solid rgba(177,199,239,55); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
             QPlainTextEdit { font-size: 14px; }
             QComboBox { padding: 6px 10px; }
@@ -380,6 +386,8 @@ class StudyWindow(QMainWindow):
         self.review_capture_button.clicked.connect(self.choose_screen)
         self.screen_choice.currentIndexChanged.connect(self.source_changed)
         self.settings_toggle.toggled.connect(self.show_settings)
+        self.provider_badge.clicked.connect(lambda: self.settings_toggle.setChecked(True))
+        self.connection_done.clicked.connect(self.finish_connection)
         self.review_toggle.toggled.connect(self.show_review)
         self.collapse_button.toggled.connect(self.collapse_overlay)
         self.close_button.clicked.connect(self.close)
@@ -445,6 +453,21 @@ class StudyWindow(QMainWindow):
             self.setup_note.setText('Setup could not be saved. Existing saved setup was preserved; session still works.')
         else:
             self.setup_note.setText('Setup saved locally. Keys, questions, images and transcripts were not saved.')
+
+    def update_connection(self):
+        key = self.key.text()
+        valid = bool(key) and key.isascii() and not any(c.isspace() or ord(c)<32 or ord(c)==127 for c in key)
+        self.connection_done.setEnabled(valid and not self.busy)
+        self.capture_button.setText('Capture && ask' if valid else 'Connect model')
+        self.provider_badge.setText(('Key entered' if valid else 'Connect') +
+                                    (' · free' if self.provider_choice.currentData() == 'openrouter_free' else ' · paid'))
+
+    def finish_connection(self):
+        if not self.connection_done.isEnabled():
+            return
+        self.settings_toggle.setChecked(False)
+        self.status.setText('Session key entered. No test request was sent. Choose your display and question, then Capture & ask.')
+        self.question.setFocus()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -605,7 +628,7 @@ class StudyWindow(QMainWindow):
 
     def update_receipt(self):
         free = self.provider_choice.currentData() == 'openrouter_free'
-        self.provider_badge.setText('FREE ROUTE' if free else 'PAID ROUTE')
+        self.update_connection()
         provider = 'OpenRouter' if free else 'OpenAI (paid)'
         screen = self.screen_choice.currentText() or 'the selected display'
         self.capture_notice.setText(f'Capture & ask sends {screen} and your question to {provider}. Preview / crop first when needed.')
@@ -618,6 +641,7 @@ class StudyWindow(QMainWindow):
         if self.busy:self.cancel_request()
         self.consent.setChecked(False)
         self.update_send()
+        self.update_connection()
 
     def show_settings(self, visible):
         if visible:self.collapse_button.setChecked(False)
@@ -817,6 +841,8 @@ class StudyWindow(QMainWindow):
         self.followup_button.setEnabled(not busy and self.last_exchange is not None)
         self.update_send()
         self.update_speech_controls()
+
+        self.update_connection()
 
     def send_request(self):
         if not self.send_button.isEnabled():
