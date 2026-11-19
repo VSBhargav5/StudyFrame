@@ -2,7 +2,7 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.10: streaming answers, quick replies and a unified glass toolbar.** StudyFrame opens
+**v0.11: session keys, balanced captures and offline accent options.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Prepare audio, choose a device,
 Listen, wait for Listening now, speak, Stop, then review/edit the local
@@ -50,6 +50,20 @@ instant free-model replies. Capture and Voice share the header in both layouts;
 there is one status banner, with a lighter native glass tint and a readable
 fallback. [Streaming contract and limits](docs/windows-release.md#streaming-and-latency).
 
+Session keys now remain separately in memory for each provider when switching back;
+Capture/Voice, New and Clear answer do not remove them. End session or exit forgets
+all keys. Provider scrolling no longer changes credentials accidentally. The reported
+key-loss cause was not reproduced; synthetic repeated Capture/Voice sends keep the
+key, so this is defensive handling, not a claimed diagnosis.
+
+New captures default to Balanced: at most1280px on the long edge, without upscaling.
+Preview and the actual send share those prepared PNG bytes; original pixels stay
+available to restore/crop. Full size preserves tiny text. Smaller pixels do not
+promise text-like vision latency; the user's10–20s image/1–2s text timings are a
+report, not a controlled benchmark. Voice includes installed US/Indian-English
+model presets; local development portable bundles both. The Indian model is an
+alternative to compare, not a recognition-quality fix. [Speech limitations](docs/speech.md).
+
 ## First use
 
 The capsule initially says **Connect model**. Model setup appears at the top.
@@ -64,7 +78,7 @@ and free-model limits vary; user trials have returned both answers and failures.
 
 Unzip the complete portable folder and open **StudyFrame.exe**. Keep `_internal`
 next to it. Python is not needed for that build. The local development package
-includes the small English speech model; builds without it let you choose a local
+includes small US/Indian English speech models; builds without it let you choose a local
 model folder. Setup choices persist locally; API keys and study content do not.
 See [Windows release and acceptance checklist](docs/windows-release.md).
 

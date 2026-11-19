@@ -30,6 +30,21 @@ class LoadedImage:
     format: str
 
 
+def resize_image(source: LoadedImage, longest_edge: int) -> LoadedImage:
+    """Prepare a smaller PNG; preserve the immutable original for restoration."""
+    if type(longest_edge) is not int or not 1<=longest_edge<=MAX_DIMENSION:
+        raise ImageError('Choose a valid capture size.')
+    if max(source.width,source.height)<=longest_edge:return source
+    from PySide6.QtCore import Qt
+    image=source.image.scaled(longest_edge,longest_edge,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)
+    if image.isNull():raise ImageError('Could not resize capture. Original kept.')
+    data=QByteArray();buffer=QBuffer(data);buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    if not image.save(buffer,'PNG'):raise ImageError('Could not encode resized capture.')
+    snapshot=bytes(data)
+    if len(snapshot)>MAX_FILE_BYTES:raise ImageError('Resized capture exceeds8MiB.')
+    return LoadedImage(snapshot,image,hashlib.sha256(snapshot).hexdigest(),image.width(),image.height(),'png')
+
+
 def crop_image(source: LoadedImage, x: int, y: int, width: int, height: int) -> LoadedImage:
     """Create a new PNG from selected oriented pixels, without source metadata.
 

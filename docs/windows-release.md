@@ -82,7 +82,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.10.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.10.0/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.11.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.11.0/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds
@@ -96,7 +96,7 @@ Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable
 
 ## Optional per-user installer
 
-The Windows CI artifact also includes an unsigned `StudyFrame-0.10.0-windows-x64-setup.exe`.
+The Windows CI artifact also includes an unsigned `StudyFrame-0.11.0-windows-x64-setup.exe`.
 It installs for the current user, adds a Start menu entry and an uninstaller, and
 does not auto-run or request admin rights. Close StudyFrame before upgrading or
 uninstalling; a running v0.9+ session blocks these operations rather than being
@@ -131,7 +131,7 @@ paid fallback was relaxed. Raw provider bodies are never echoed.
 For an explicit public-metadata transport check (no key/content/model request):
 
 ```powershell
-out/portable-v0.10.0/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
+out/portable-v0.11.0/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
 ```
 
 This contacts only OpenRouter's public models endpoint and checks HTTPS response
@@ -193,3 +193,20 @@ closes setup and clears stale failure feedback, without a connection test.
 A timeout/incomplete answer is not evidence that the key was absent or invalid.
 
 Primary protocol: [OpenRouter streaming documentation](https://github.com/OpenRouterTeam/docs/blob/main/api_reference/streaming.mdx).
+
+
+## Session and capture changes
+
+Keys remain session-only and provider-specific in memory, never in saved setup.
+End session/exit drops all. Clear answer/New/Capture/Voice retain them. Explicit
+provider changes isolate the key; switching back restores that provider's key.
+No key is reused at the other host. Mouse-wheel scroll cannot change provider.
+We could not reproduce the user's key loss by Capture/Voice switching alone.
+
+Balanced applies to new display captures only: aspect-preserving PNG downscale
+with a1280px longest edge, no upscale. Preview shows the exact prepared snapshot;
+Full size retains original resolution, and original pixels can be restored/cropped.
+Existing loaded images are not silently resized. Fewer pixels may reduce work,
+but vision/queue/model choice can still take longer than text. No latency promise.
+Optional build: add --indian-model models/vosk-model-small-en-in-0.4 alongside
+--model models/vosk-model-small-en-us-0.15 to bundle both presets. CI omits weights.

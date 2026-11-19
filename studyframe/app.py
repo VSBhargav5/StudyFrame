@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QDialog, QInputDialog, QFrame, QSizeGrip, QProgressBar, QMessageBox,
 )
 
-from studyframe.images import ImageError, LoadedImage, load_image, crop_image
+from studyframe.images import ImageError, LoadedImage, load_image, crop_image, resize_image
 from studyframe.crop import CropDialog
 from studyframe.requests import RequestError, prepare_request
 from studyframe.provider import StudyProvider, payload, PROVIDERS, provider_config
@@ -23,6 +23,12 @@ from studyframe.backdrop import create_backdrop
 from studyframe.speech import SpeechSession
 from studyframe.preferences import Preferences
 from studyframe.launcher import default_model
+
+
+class ProviderPicker(QComboBox):
+    def wheelEvent(self,event):
+        # Scrolling the settings drawer must not silently switch credentials.
+        event.ignore()
 
 
 class StudyWindow(QMainWindow):
@@ -51,6 +57,8 @@ class StudyWindow(QMainWindow):
         self.backdrop_attempted = False
         self.screen_handle = None
         self.request_failed = False
+        self.session_keys = {}
+        self.key_provider = None
         self.request_clock = QElapsedTimer()
         self.first_text_ms = None
         self.partial_answer = False
@@ -166,6 +174,12 @@ class StudyWindow(QMainWindow):
         self.new_topic_button.setToolTip('Start a new question')
         self.new_topic_button.setObjectName('ghost')
         style_row.addWidget(self.mode)
+        self.capture_size = QComboBox()
+        self.capture_size.addItem('Image: balanced',1280)
+        self.capture_size.addItem('Image: full size',None)
+        self.capture_size.setAccessibleName('Next capture image size')
+        self.capture_size.setToolTip('Balanced resizes the next capture to at most1280px on its longest edge. Preview shows sent pixels; Full size retains fine text. Vision can still be slower than text.')
+        source_row.insertWidget(1,self.capture_size)
         style_row.addStretch()
         style_row.addWidget(self.new_topic_button)
         style_row.addWidget(self.review_toggle)
@@ -195,7 +209,10 @@ class StudyWindow(QMainWindow):
             button.setEnabled(False)
             answer_actions.addWidget(button)
         answer_actions.addStretch()
-        self.clear_button = QPushButton('Clear')
+        self.clear_answer_button = QPushButton('Clear answer')
+        self.clear_answer_button.setObjectName('ghost')
+        answer_actions.addWidget(self.clear_answer_button)
+        self.clear_button = QPushButton('End session')
         self.clear_button.setAccessibleName('Clear session')
         self.clear_button.setToolTip('Clear session, including the session key')
         self.clear_button.setObjectName('ghost')
@@ -225,6 +242,13 @@ class StudyWindow(QMainWindow):
         self.speech_model.setAccessibleName('Local Vosk model folder')
         self.speech_model.setPlaceholderText('Choose an extracted Vosk model folder')
         voice.addWidget(self.speech_model)
+        self.speech_variant = QComboBox()
+        self.speech_variant.addItem('Keep current model folder',None)
+        self.speech_variant.addItem('Try Indian English · offline',str(default_model().parent/'vosk-model-small-en-in-0.4'))
+        self.speech_variant.addItem('US English · offline',str(default_model()))
+        self.speech_variant.setAccessibleName('Offline speech model preset')
+        self.speech_variant.setToolTip('Select an installed model. Accent-specific models still make mistakes; review the transcript. No audio upload.')
+        voice.addWidget(self.speech_variant)
         actions = QHBoxLayout()
         self.speech_browse = QPushButton('Model folder…')
         self.speech_prepare = QPushButton('Prepare audio')
@@ -266,7 +290,7 @@ class StudyWindow(QMainWindow):
         settings = QVBoxLayout(self.settings_pane)
         settings.setSpacing(9)
         settings.addWidget(QLabel(f'MODEL CONNECTION · StudyFrame {__version__}'))
-        self.provider_choice = QComboBox()
+        self.provider_choice = ProviderPicker()
         self.provider_choice.setAccessibleName('AI provider')
         for identifier in ('openrouter_free','openai'):self.provider_choice.addItem(PROVIDERS[identifier]['label'],identifier)
         settings.addWidget(self.provider_choice)
@@ -439,6 +463,9 @@ class StudyWindow(QMainWindow):
         self.copy_button.clicked.connect(self.copy_text)
         self.copy_answer_button.clicked.connect(self.copy_answer)
         self.clear_button.clicked.connect(self.clear_session)
+        self.clear_answer_button.clicked.connect(self.clear_answer)
+        self.capture_size.currentIndexChanged.connect(self.invalidate)
+        self.speech_variant.activated.connect(self.choose_speech_variant)
         self.question.textChanged.connect(self.invalidate)
         self.answer.textChanged.connect(self.update_capsule_status)
         self.context.textChanged.connect(self.material_changed)
@@ -649,6 +676,15 @@ class StudyWindow(QMainWindow):
         if folder:
             self.speech_model.setText(folder)
 
+    def choose_speech_variant(self):
+        folder=self.speech_variant.currentData()
+        if folder is None:return
+        if not (Path(folder)/'am/final.mdl').is_file():
+            self.speech_note.setText('This model is not bundled. Choose an extracted trusted model folder; current selection kept.')
+            return
+        self.speech_model.setText(folder)
+        self.speech_note.setText('Offline model selected. Prepare audio before listening; review recognition errors. No recording started.')
+
     def audio_setup_changed(self):
         self.speech.cancel()
         self.speech_device.clear()
@@ -685,7 +721,7 @@ class StudyWindow(QMainWindow):
         self.speech_record.setText('Stop' if active and not preparing else 'Listen')
         self.speech_record.setEnabled(not self.busy and (active and not preparing or getattr(self.speech, 'prepared', False)))
         self.speech_prepare.setEnabled(not self.busy and not active)
-        for widget in (self.speech_source, self.speech_device, self.speech_model, self.speech_browse, self.speech_text):
+        for widget in (self.speech_source, self.speech_device, self.speech_model, self.speech_variant, self.speech_browse, self.speech_text):
             widget.setEnabled(not self.busy and not active)
         self.ask_speech.setEnabled(bool(self.speech_text.toPlainText().strip()) and not active and not self.busy)
         self.capture_button.setEnabled(not self.busy and not active)
@@ -863,7 +899,10 @@ class StudyWindow(QMainWindow):
         self.capture_timer.start(350)
 
     def provider_changed(self):
-        self.key.clear()
+        selected=self.provider_choice.currentData()
+        if self.key_provider is not None:self.session_keys[self.key_provider]=self.key.text()
+        self.key_provider=selected
+        self.key.setText(self.session_keys.get(selected,''))
         config = provider_config(self.provider_choice.currentData())
         self.key.setPlaceholderText(config['label']+' key - session only')
         self.key.setAccessibleName(config['label']+' API key')
@@ -909,6 +948,9 @@ class StudyWindow(QMainWindow):
         self.capture_timer.stop()
         try:
             selected = capture_screen(screen)
+            original = selected
+            if self.capture_size.currentData() is not None:
+                selected=resize_image(selected,self.capture_size.currentData())
         except ImageError as exc:
             self.set_busy(False)
             self.consent.setChecked(False)
@@ -918,7 +960,8 @@ class StudyWindow(QMainWindow):
             return
         self.set_busy(False)
         self.attachment = selected
-        self.original_attachment = selected
+        self.original_attachment = original
+        self.restore_button.setEnabled(selected is not original)
         self.image_name = 'Display capture '+datetime.now().astimezone().isoformat(timespec='seconds')
         self.material_changed()
         self.update_image_info()
@@ -975,7 +1018,7 @@ class StudyWindow(QMainWindow):
         self.top_cancel.setVisible(busy)
         self.update_capsule_status()
         for widget in (self.question, self.context, self.mode, self.choose_button,
-                       self.prepare_button, self.key, self.consent, self.capture_button, self.provider_choice, self.pin):
+                       self.prepare_button, self.key, self.consent, self.capture_button, self.provider_choice, self.pin, self.capture_size):
             widget.setEnabled(not busy)
         self.remove_button.setEnabled(not busy and self.attachment is not None)
         self.crop_button.setEnabled(not busy and self.attachment is not None)
@@ -1085,6 +1128,7 @@ class StudyWindow(QMainWindow):
         self.capture_timer.stop()
         self.pending_screen = None
         self.provider.cancel()
+        self.session_keys.clear()
         self.key.clear()
         super().closeEvent(event)
 
@@ -1135,7 +1179,7 @@ class StudyWindow(QMainWindow):
             self.image_info.setText("No image selected")
             return
         image = self.attachment
-        kind = "Original" if image is self.original_attachment else "Cropped PNG"
+        kind = "Original" if image is self.original_attachment else "Prepared PNG"
         self.image_info.setText(f"{self.image_name} · {kind} · {image.width} × {image.height} · "
                                 f"{len(image.data):,} bytes · SHA256 {image.sha256[:12]}…")
 
@@ -1235,10 +1279,21 @@ class StudyWindow(QMainWindow):
             QApplication.clipboard().setText(self.answer.toPlainText())
             self.status.setText("AI answer copied. Verify it before relying on it; clipboard history may retain it.")
 
+    def clear_answer(self):
+        self.cancel_request()
+        self.answer.clear()
+        self.last_exchange=None
+        self.followup_context=None
+        self.partial_answer=False
+        self.copy_answer_button.setEnabled(False)
+        self.followup_button.setEnabled(False)
+        self.show_feedback('Answer cleared. Session keys and question kept.')
+
     def clear_session(self):
         self.discard_speech()
         self.cancel_request()
         self.sent_question = ""
+        self.session_keys.clear()
         self.key.clear()
         self.question.clear()
         self.context.clear()
