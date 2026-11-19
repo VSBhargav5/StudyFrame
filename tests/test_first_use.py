@@ -24,6 +24,17 @@ class FirstUseTests(unittest.TestCase):
             post.assert_not_called()
             self.assertFalse(w.key.text())
 
+    def test_bad_pasted_key_in_capsule_shows_explanation_without_echoing_or_capturing(self):
+        w=self.window
+        w.key.setText('synthetic secret with space')
+        with patch('studyframe.app.capture_screen') as capture,patch.object(w.provider.manager,'post') as post:
+            w.capture_button.click();self.app.processEvents()
+            self.assertTrue(w.settings_pane.isVisible())
+            self.assertTrue(w.feedback.isVisible())
+            self.assertIn('spaces',w.feedback.text())
+            self.assertNotIn('synthetic secret',w.feedback.text())
+            capture.assert_not_called();post.assert_not_called()
+
     def test_setup_is_first_and_explicit_key_action_never_captures_or_sends(self):
         w = self.window
         with patch('studyframe.app.capture_screen') as capture, patch.object(w.provider.manager, 'post') as post:

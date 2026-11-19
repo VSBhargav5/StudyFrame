@@ -50,6 +50,9 @@ def worker_pipes():
 
 
 def main():
+    if sys.argv[1:2] == ['--connection-check']:
+        from studyframe.connectivity import main as check_main
+        return check_main(sys.argv[2:])
     if sys.argv[1:2] == ['--speech-worker']:
         try:
             worker_pipes()

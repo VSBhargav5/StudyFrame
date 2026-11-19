@@ -50,6 +50,7 @@ class StudyWindow(QMainWindow):
         self.native_backdrop = None
         self.backdrop_attempted = False
         self.screen_handle = None
+        self.request_failed = False
         self.setWindowTitle(f"StudyFrame {__version__} - Screen companion")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -84,6 +85,10 @@ class StudyWindow(QMainWindow):
         self.capture_button.setShortcut('Ctrl+Return')
         self.capture_button.setToolTip('Capture the selected display and send its fresh pixels to the selected model. Ctrl+Enter while focused.')
         title.addWidget(self.capture_button)
+        self.top_cancel = QPushButton('Cancel request')
+        self.top_cancel.setAccessibleName('Cancel request without scrolling')
+        self.top_cancel.hide()
+        title.addWidget(self.top_cancel)
         self.settings_toggle = QPushButton('…')
         self.settings_toggle.setCheckable(True)
         self.settings_toggle.setAccessibleName('Connection settings')
@@ -104,6 +109,12 @@ class StudyWindow(QMainWindow):
         self.progress.setFixedHeight(2)
         self.progress.hide()
         root.addWidget(self.progress)
+        self.feedback = QLabel()
+        self.feedback.setObjectName('requestFeedback')
+        self.feedback.setTextFormat(Qt.TextFormat.PlainText)
+        self.feedback.setWordWrap(True)
+        self.feedback.hide()
+        root.addWidget(self.feedback)
 
         self.content = QWidget()
         content = QVBoxLayout(self.content)
@@ -244,7 +255,7 @@ class StudyWindow(QMainWindow):
         self.settings_pane.setObjectName('drawer')
         settings = QVBoxLayout(self.settings_pane)
         settings.setSpacing(9)
-        settings.addWidget(QLabel('CONNECT YOUR MODEL'))
+        settings.addWidget(QLabel(f'MODEL CONNECTION · StudyFrame {__version__}'))
         self.provider_choice = QComboBox()
         self.provider_choice.setAccessibleName('AI provider')
         for identifier in ('openrouter_free','openai'):self.provider_choice.addItem(PROVIDERS[identifier]['label'],identifier)
@@ -369,6 +380,7 @@ class StudyWindow(QMainWindow):
             QLabel#brandMark { border-radius: 10px; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #b6a0ff,stop:1 #79d6e2); color: #152338; font-size: 17px; font-weight: 800; }
             QLabel#muted { color: #c3cfe3; font-size: 12px; }
             QLabel#eyebrow { color: #c3cfe3; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
+            QLabel#requestFeedback { color: #edf2ff; background: rgba(18,27,45,220); border: 1px solid #7384a3; border-radius: 9px; padding: 8px; font-size: 12px; }
             QPushButton#routeBadge { color: #93e5ce; font-size: 11px; font-weight: 600; background: rgba(90,220,180,18); border: 1px solid rgba(115,231,194,35); border-radius: 9px; padding: 5px 9px; }
             QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,165); color: #e8edf8; placeholder-text-color: #c3cfe3; border: 1px solid rgba(177,199,239,55); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
             QPlainTextEdit { font-size: 14px; }
@@ -396,6 +408,7 @@ class StudyWindow(QMainWindow):
             QProgressBar::chunk { background: #b3a7ee; }
         """)
         self.capture_button.clicked.connect(self.capture_and_ask)
+        self.top_cancel.clicked.connect(self.cancel_request)
         self.review_capture_button.clicked.connect(self.choose_screen)
         self.screen_choice.currentIndexChanged.connect(self.source_changed)
         self.settings_toggle.toggled.connect(self.show_settings)
@@ -592,7 +605,7 @@ class StudyWindow(QMainWindow):
             phase = getattr(self.speech, 'phase', '')
             audio = {'preparing':'Preparing audio', 'starting':'Starting audio', 'listening':'Listening now',
                      'stopping':'Finishing audio'}.get(phase, 'Audio active')
-            prefix = (audio if self.speech.active else 'Thinking' if self.busy else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
+            prefix = (audio if self.speech.active else 'Thinking' if self.busy else 'Request failed · expand' if self.request_failed else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
         self.privacy_badge.setText(prefix + self.capture_state)
 
     def open_voice(self):
@@ -729,12 +742,32 @@ class StudyWindow(QMainWindow):
     def show_review(self, visible):
         if visible:self.collapse_button.setChecked(False)
         self.review_pane.setVisible(visible)
-        if visible:QTimer.singleShot(0,self,self.render_image)
+        if visible:QTimer.singleShot(0,self,self.reveal_preview)
+
+    def reveal_preview(self):
+        if self.review_pane.isVisible():
+            self.render_image()
+            self.scroll.ensureWidgetVisible(self.image_label)
+
+    def show_feedback(self, message, *, failed=False):
+        self.request_failed = failed
+        self.feedback.setText(message)
+        self.feedback.setVisible(not self.collapse_button.isChecked())
+        self.status.setText(message)
+        self.update_capsule_status()
+
+    def reveal_answer(self):
+        self.collapse_button.setChecked(False)
+        self.settings_toggle.setChecked(False)
+        self.review_toggle.setChecked(False)
+        self.speech_pane.hide()
+        QTimer.singleShot(0,self,lambda:self.scroll.ensureWidgetVisible(self.answer) if self.isVisible() else None)
 
     def collapse_overlay(self, collapsed):
         self.brand_name.setVisible(not collapsed)
         self.status.setVisible(not collapsed)
         self.size_grip.setVisible(not collapsed)
+        self.feedback.setVisible(not collapsed and bool(self.feedback.text()))
         self.centralWidget().compact = collapsed
         self.privacy_badge.setAlignment(Qt.AlignmentFlag.AlignCenter if collapsed else Qt.AlignmentFlag.AlignLeft)
         if collapsed:
@@ -763,26 +796,30 @@ class StudyWindow(QMainWindow):
         if self.busy or self.speech.active:return
         if not self.key.text():
             self.settings_toggle.setChecked(True)
-            self.status.setText('Add your session key in connection settings, then Capture & ask.')
+            self.show_feedback('Add your session key in connection settings, then Capture & ask. Nothing captured or sent.')
             return
         key = self.key.text()
         if not key.isascii() or any(c.isspace() or ord(c)<32 or ord(c)==127 for c in key):
-            self.status.setText('Enter a valid API key in connection settings.')
+            self.settings_toggle.setChecked(True)
+            self.show_feedback('The key contains spaces or unsupported characters. Correct the masked key field. Nothing captured or sent.')
             return
         screen = self.screen_choice.currentData()
         if screen is None or screen not in QApplication.screens():
             self.refresh_screens()
-            self.status.setText('Selected display is unavailable. Review the display selection and click again.')
+            self.collapse_button.setChecked(False)
+            self.show_feedback('Selected display is unavailable. Review the display selection and click again.')
             return
         question = self.question.toPlainText().strip()
         if not question and self.followup_context is not None:
-            self.status.setText('Type a follow-up question before capturing again.')
+            self.collapse_button.setChecked(False)
+            self.show_feedback('Type a follow-up question before capturing again.')
             return
         question = question or 'Explain what is on this screen.'
         try:
             text = prepare_request(question,self.context.toPlainText(),self.mode.currentData(),previous=self.followup_context)
         except RequestError as exc:
-            self.status.setText(str(exc))
+            self.collapse_button.setChecked(False)
+            self.show_feedback(str(exc))
             return
         self.settings_toggle.setChecked(False)
         self.review_toggle.setChecked(False)
@@ -845,8 +882,9 @@ class StudyWindow(QMainWindow):
         except ImageError as exc:
             self.set_busy(False)
             self.consent.setChecked(False)
-            self.status.setText(str(exc)+' Previous selection kept; nothing sent.')
             self.show()
+            self.reveal_answer()
+            self.show_feedback(str(exc)+' Previous selection kept; nothing sent.',failed=True)
             return
         self.set_busy(False)
         self.attachment = selected
@@ -902,6 +940,8 @@ class StudyWindow(QMainWindow):
 
     def set_busy(self, busy):
         self.busy = busy
+        self.capture_button.setVisible(not busy)
+        self.top_cancel.setVisible(busy)
         self.update_capsule_status()
         for widget in (self.question, self.context, self.mode, self.choose_button,
                        self.prepare_button, self.key, self.consent, self.capture_button, self.provider_choice, self.pin):
@@ -929,10 +969,11 @@ class StudyWindow(QMainWindow):
         if self.speech.active:
             return
         self.answer.clear()
+        self.reveal_answer()
         self.copy_answer_button.setEnabled(False)
         self.sent_question = question
         self.set_busy(True)
-        self.status.setText('Thinking · '+PROVIDERS[self.provider_choice.currentData()]['label'])
+        self.show_feedback('Waiting for '+PROVIDERS[self.provider_choice.currentData()]['label']+' · up to 60 seconds. Cancel is available below.')
         try:
             self.provider.send(body,self.key.text(),self.provider_choice.currentData())
         except ValueError as exc:
@@ -944,6 +985,7 @@ class StudyWindow(QMainWindow):
         self.set_busy(False)
         self.consent.setChecked(False)
         self.answer.setPlainText(text)
+        self.reveal_answer()
         self.last_exchange = (self.sent_question, text)
         self.followup_context = None
         self.followup_note.setText("Select Follow up to include this last exchange in your next question.")
@@ -951,14 +993,15 @@ class StudyWindow(QMainWindow):
         self.copy_answer_button.setEnabled(True)
         self.review_toggle.setChecked(False)
         self.answer.setFocus()
-        self.status.setText("AI answer received. Model: "+(getattr(self.provider,"model_used","") or "not reported")+". Verify its reasoning with a small example.")
+        self.show_feedback("Answer received. Model: "+(getattr(self.provider,"model_used","") or "not reported")+". Verify with a small example.")
 
     def receive_error(self, message):
         if not self.busy:
             return
         self.set_busy(False)
         self.consent.setChecked(False)
-        self.status.setText(message)
+        self.reveal_answer()
+        self.show_feedback(message,failed=True)
 
     def cancel_request(self):
         self.direct_request = None
@@ -970,7 +1013,7 @@ class StudyWindow(QMainWindow):
         self.provider.cancel()
         self.set_busy(False)
         self.consent.setChecked(False)
-        self.status.setText("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
+        self.show_feedback("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
 
     def closeEvent(self, event):
         self.save_setup()
@@ -992,6 +1035,10 @@ class StudyWindow(QMainWindow):
             self.cancel_request()
         self.consent.setChecked(False)
         self.answer.clear()
+        self.request_failed = False
+        self.feedback.clear()
+        self.feedback.hide()
+        self.update_capsule_status()
         self.last_exchange = None
         self.followup_button.setEnabled(False)
         self.copy_answer_button.setEnabled(False)

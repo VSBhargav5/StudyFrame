@@ -15,6 +15,7 @@ def main():
     views.add_argument("--crop-editor", action="store_true", help="Open the crop editor with the synthetic image")
     views.add_argument('--overlay-answer',action='store_true',help='Show a labelled offline example answer in the glass overlay')
     views.add_argument('--collapsed',action='store_true',help='Show the compact glass bar without capturing or sending')
+    views.add_argument('--request-error',action='store_true',help='Show a synthetic request failure without making a network request')
     args = parser.parse_args()
     if args.snapshot:
         os.environ.setdefault("QT_QPA_PLATFORM", "windows" if sys.platform == "win32" else "offscreen")
@@ -60,6 +61,9 @@ def main():
             window.set_busy(True)
             window.receive_answer('range(3) produces 0, 1 and 2. The stop value is excluded.\n\nTo include 3, use range(4).\n\nSynthetic example - no model was called.')
         if args.collapsed:window.collapse_button.setChecked(True)
+        if args.request_error:
+            window.set_busy(True)
+            window.receive_error('Synthetic HTTP 404: No compatible free endpoint matched the current filters. No request was sent in this demo.')
         target = window
         if args.crop_editor:
             dialog = CropDialog(window.attachment.image, window)

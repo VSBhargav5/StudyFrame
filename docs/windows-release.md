@@ -82,7 +82,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.9.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.9.0/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.9.1/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.9.1/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds
@@ -96,7 +96,7 @@ Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable
 
 ## Optional per-user installer
 
-The Windows CI artifact also includes an unsigned `StudyFrame-0.9.0-windows-x64-setup.exe`.
+The Windows CI artifact also includes an unsigned `StudyFrame-0.9.1-windows-x64-setup.exe`.
 It installs for the current user, adds a Start menu entry and an uninstaller, and
 does not auto-run or request admin rights. Close StudyFrame before upgrading or
 uninstalling; a running v0.9+ session blocks these operations rather than being
@@ -116,3 +116,24 @@ file set and links/reparse points are checked before compilation; existing setup
 outputs are refused. `verify_installer.py` is only for a disposable Windows CI
 runner, never a personal install; it tests install, active-session refusal,
 reinstall, installed runtime and retained configuration after uninstall.
+
+
+## When a request appears to do nothing
+
+The answer area is revealed when a send starts or completes, with a visible status
+banner for waiting, failure or success. Preview reveals the captured image. A
+collapsed failed request says Request failed; expanding shows its safe error.
+HTTP401 means key/project access,429 rate limits, and OpenRouter404 may mean no
+compatible endpoint matches the current model/image/privacy/price restrictions.
+These are not automatically resolved by buying credits; no policy, pricing or
+paid fallback was relaxed. Raw provider bodies are never echoed.
+
+For an explicit public-metadata transport check (no key/content/model request):
+
+```powershell
+out/portable-v0.9.1/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
+```
+
+This contacts only OpenRouter's public models endpoint and checks HTTPS response
+headers, refusing redirects. It does not validate your key, quota or model quality.
+The ordinary offline self-test additionally checks packaged TLS availability.

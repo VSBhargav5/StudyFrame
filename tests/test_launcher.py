@@ -7,6 +7,13 @@ from studyframe.launcher import default_model, main
 
 
 class LauncherTests(unittest.TestCase):
+    def test_metadata_check_dispatch_does_not_open_gui_or_speech(self):
+        with patch.object(sys,'argv',['StudyFrame.exe','--connection-check','--output','new.json']), \
+             patch('studyframe.connectivity.main',return_value=0) as check, \
+             patch('studyframe.app.main') as gui,patch('studyframe.speech_worker.main') as speech:
+            self.assertEqual(main(),0)
+        check.assert_called_once_with(['--output','new.json'])
+        gui.assert_not_called();speech.assert_not_called()
     def test_frozen_model_uses_executable_folder_not_unpack_or_working_directory(self):
         with tempfile.TemporaryDirectory() as folder, \
              patch.object(sys,'frozen',True,create=True), patch.object(sys,'executable',str(Path(folder)/'StudyFrame.exe')):
