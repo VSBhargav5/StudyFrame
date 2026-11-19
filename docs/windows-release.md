@@ -82,7 +82,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.9.1/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.9.1/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.9.2/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.9.2/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds
@@ -96,7 +96,7 @@ Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable
 
 ## Optional per-user installer
 
-The Windows CI artifact also includes an unsigned `StudyFrame-0.9.1-windows-x64-setup.exe`.
+The Windows CI artifact also includes an unsigned `StudyFrame-0.9.2-windows-x64-setup.exe`.
 It installs for the current user, adds a Start menu entry and an uninstaller, and
 does not auto-run or request admin rights. Close StudyFrame before upgrading or
 uninstalling; a running v0.9+ session blocks these operations rather than being
@@ -131,9 +131,38 @@ paid fallback was relaxed. Raw provider bodies are never echoed.
 For an explicit public-metadata transport check (no key/content/model request):
 
 ```powershell
-out/portable-v0.9.1/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
+out/portable-v0.9.2/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
 ```
 
 This contacts only OpenRouter's public models endpoint and checks HTTPS response
 headers, refusing redirects. It does not validate your key, quota or model quality.
 The ordinary offline self-test additionally checks packaged TLS availability.
+
+
+## HTTP429 and free usage
+
+HTTP429 does not by itself distinguish daily account allowance from a per-minute
+or upstream-provider limit. It does not establish that adding a payment method is
+required. Stop repeated model attempts; failed attempts can consume free allowance.
+In model settings, **Check free usage · no model request** explicitly sends your
+session key only to OpenRouter's fixed HTTPS `GET /api/v1/key`. It sends no study
+text, screenshot, audio or model inference request and has no automatic retry.
+The app shows only reported daily used/limit/remaining counters, never raw account
+labels, budget metadata or response bodies. It does not infer quota from a $5 key
+spending cap. Unknown quota formats remain unknown. This is reported tier policy,
+not a guarantee that a particular endpoint is currently available or limited.
+
+A positive daily remainder does not remove per-minute or individual-provider caps.
+If the response includes a valid numeric Retry-After of at most one day, the app
+shows that waiting guidance. HTTP-date or unrecognized hints are not guessed. No
+account, payment method, privacy policy or pricing cap is changed;
+there is no key rotation, automatic resend or paid fallback.
+
+Primary contracts: [OpenRouter limits and key counters](https://openrouter.ai/docs/api_reference/limits),
+[Retry-After and error semantics](https://openrouter.ai/docs/api_reference/errors-and-debugging).
+
+OpenRouter may now try another eligible provider under the same free-router,
+zero-price and data-collection-deny filters. Previously allow_fallbacks=false
+unnecessarily disabled even free-provider backup routing. This does not add
+client retries, paid alternatives or a bypass of platform/account quota. It can
+help only when another matching provider is available. Live success is unverified.

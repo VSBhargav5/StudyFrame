@@ -21,7 +21,7 @@ class FreeProviderTests(unittest.TestCase):
     def test_fixed_free_route_and_zero_cost_policy_no_tools_or_paid_models(self):
         body=payload('Explain the screen',provider='openrouter_free');record=json.loads(body)
         self.assertEqual(record['model'],'openrouter/free');self.assertEqual(record['provider'],FREE_POLICY)
-        self.assertEqual(record['provider']['data_collection'],'deny');self.assertFalse(record['provider']['allow_fallbacks'])
+        self.assertEqual(record['provider']['data_collection'],'deny');self.assertTrue(record['provider']['allow_fallbacks'])
         self.assertTrue(all(v==0 for v in record['provider']['max_price'].values()))
         self.provider.send(body,'synthetic-key','openrouter_free')
         request,submitted=self.manager.post.call_args.args
@@ -36,6 +36,15 @@ class FreeProviderTests(unittest.TestCase):
         for changeset in changes:
             changed=copy.deepcopy(original);changed.update(changeset)
             with self.subTest(change=changeset),self.assertRaises(ValueError):self.provider.send(json.dumps(changed).encode(),'key','openrouter_free')
+        self.manager.post.assert_not_called()
+
+    def test_free_backup_providers_cannot_weaken_price_or_data_policy(self):
+        for field in ('prompt','completion','request','image','data_collection'):
+            record=json.loads(payload('q',provider='openrouter_free'))
+            if field=='data_collection':record['provider'][field]='allow'
+            else:record['provider']['max_price'][field]=0.01
+            with self.assertRaises(ValueError):
+                self.provider.send(json.dumps(record).encode(),'synthetic-key','openrouter_free')
         self.manager.post.assert_not_called()
 
     def test_provider_switch_clears_key_preview_consent_and_previous_exchange(self):

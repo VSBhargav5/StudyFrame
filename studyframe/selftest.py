@@ -29,9 +29,15 @@ def main(argv=None):
     class OfflineProvider(QObject):
         succeeded = Signal(str)
         failed = Signal(str)
+        quota_received = Signal(str)
         model_used = 'offline-synthetic-fixture'
+        mode = 'answer'
         def cancel(self): pass
+        def check_quota(self, key):
+            self.mode='quota'
+            QTimer.singleShot(0,self,lambda:self.quota_received.emit('Synthetic quota: 48 of 50 remaining.'))
         def send(self, body, key, provider):
+            self.mode='answer'
             data = json.loads(body)
             content = data['input'][0]['content']
             assert len(content) == 1 and content[0]['type'] == 'input_text'
@@ -58,6 +64,11 @@ def main(argv=None):
             window.ask_transcript(); app.processEvents()
             assert window.answer.toPlainText() == 'Synthetic answer: 0, 1, 2.'
             checks.append('text-only-answer-journey')
+            window.settings_toggle.setChecked(True);app.processEvents()
+            window.quota_button.click();app.processEvents()
+            assert '48 of 50' in window.feedback.text()
+            assert window.answer.toPlainText()=='Synthetic answer: 0, 1, 2.'
+            checks.append('quota-button-without-model-inference')
             window.save_setup()
             saved = store.path.read_text(encoding='utf-8')
             assert 'selftest-key' not in saved and 'range(3)' not in saved
