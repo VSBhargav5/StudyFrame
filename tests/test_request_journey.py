@@ -123,3 +123,31 @@ class RequestJourneyTests(unittest.TestCase):
         self.assertFalse(w.busy)
         self.assertIn('Cancelled locally',w.feedback.text())
         self.assertTrue(w.capture_button.isVisible())
+
+    def test_real_http_stream_displays_first_text_before_completion(self):
+        w=self.window;self.defer=True
+        first=b'data: '+json.dumps({'type':'response.output_text.delta','delta':'5'}).encode()+b'\n\n'
+        last=b'data: '+json.dumps({'type':'response.completed','response':json.loads(response('5'))}).encode()+b'\n\n'
+        w.open_voice();w.speech_text.setPlainText('What is 2+3?')
+        with self.config():
+            QTest.mouseClick(w.ask_speech,Qt.MouseButton.LeftButton)
+            self.wait(lambda:bool(self.packets))
+            socket=self.connections[0]
+            socket.write(f'HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {len(first+last)}\r\n\r\n'.encode()+first)
+            self.wait(lambda:w.answer.toPlainText()=='5')
+            self.assertTrue(w.busy);self.assertIsNone(w.last_exchange)
+            socket.write(last);socket.disconnectFromHost()
+            self.wait(lambda:not w.busy)
+        self.assertEqual(w.last_exchange[1],'5');self.assertIn('first text',w.feedback.text())
+        self.assertEqual(len(self.packets),1)
+
+    def test_real_429_retry_header_is_read_without_binding_errors(self):
+        w=self.window;self.defer=True
+        w.open_voice();w.speech_text.setPlainText('Synthetic question')
+        with self.config():
+            QTest.mouseClick(w.ask_speech,Qt.MouseButton.LeftButton)
+            self.wait(lambda:bool(self.packets))
+            socket=self.connections[0]
+            socket.write(b'HTTP/1.1 429 Limited\r\nRetry-After: 12\r\nContent-Length: 0\r\nConnection: close\r\n\r\n')
+            socket.disconnectFromHost();self.wait(lambda:not w.busy)
+        self.assertIn('12 seconds',w.feedback.text());self.assertTrue(w.request_failed)

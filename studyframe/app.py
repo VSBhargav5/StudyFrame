@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from studyframe import __version__
 
-from PySide6.QtCore import Qt, QTimer, QEvent, QRectF, QUrl
+from PySide6.QtCore import Qt, QTimer, QElapsedTimer, QEvent, QRectF, QUrl
 from PySide6.QtGui import QPixmap, QPainterPath, QRegion, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
@@ -51,6 +51,12 @@ class StudyWindow(QMainWindow):
         self.backdrop_attempted = False
         self.screen_handle = None
         self.request_failed = False
+        self.request_clock = QElapsedTimer()
+        self.first_text_ms = None
+        self.partial_answer = False
+        self.wait_timer = QTimer(self)
+        self.wait_timer.setInterval(1000)
+        self.wait_timer.timeout.connect(self.update_wait_feedback)
         self.setWindowTitle(f"StudyFrame {__version__} - Screen companion")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -79,6 +85,10 @@ class StudyWindow(QMainWindow):
         name.setToolTip(f'StudyFrame {__version__} - visible desktop companion')
         title.addWidget(name)
         title.addStretch()
+        self.voice_button = QPushButton('Voice')
+        self.voice_button.setAccessibleName('Voice question controls')
+        self.voice_button.setToolTip('Prepare local microphone or computer-audio transcription')
+        title.addWidget(self.voice_button)
         self.capture_button = QPushButton('Capture && ask')
         self.capture_button.setAccessibleName('Capture & ask')
         self.capture_button.setObjectName('primary')
@@ -146,7 +156,7 @@ class StudyWindow(QMainWindow):
         style_row = QHBoxLayout()
         self.mode = QComboBox()
         self.mode.setAccessibleName('Answer style')
-        for label,value in [('Explain','explain'),('Hint','hint'),('Debug','debug')]:self.mode.addItem(label,value)
+        for label,value in [('Quick answer','quick'),('Explain','explain'),('Hint','hint'),('Debug','debug')]:self.mode.addItem(label,value)
         self.review_toggle = QPushButton('Preview')
         self.review_toggle.setToolTip('Preview or crop the captured image')
         self.review_toggle.setCheckable(True)
@@ -171,7 +181,7 @@ class StudyWindow(QMainWindow):
         self.answer = QPlainTextEdit()
         self.answer.setReadOnly(True)
         self.answer.setAccessibleName('AI study answer')
-        self.answer.setPlaceholderText('A little clarity, right here.\n\nCapture your screen to ask the model about it. Your answer will appear in this space.')
+        self.answer.setPlaceholderText('Your answer appears here as it arrives.\n\nCapture a screen or ask with a reviewed voice transcript.')
         self.answer.setMinimumHeight(180)
         content.addWidget(self.answer,1)
         answer_actions = QHBoxLayout()
@@ -359,20 +369,16 @@ class StudyWindow(QMainWindow):
         content.addWidget(self.review_pane)
 
         footer = QHBoxLayout()
-        self.status = QLabel('Connect a model, then Capture & ask.')
+        self.status = QLabel('Connect a model, then Capture & ask.', panel)
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setObjectName('muted')
-        self.status.setMaximumHeight(44)
-        footer.addWidget(self.status,1)
+        # One prominent feedback banner; do not repeat long errors in the footer.
+        self.status.hide()
         self.privacy_badge = QLabel('Checking capture…')
         self.capture_state = 'Checking capture…'
         self.privacy_badge.setObjectName('muted')
         footer.addWidget(self.privacy_badge)
-        self.voice_button = QPushButton('Voice')
-        self.voice_button.setObjectName('ghost')
-        self.voice_button.setAccessibleName('Voice question controls')
-        footer.addWidget(self.voice_button)
         self.size_grip = QSizeGrip(self)
         self.size_grip.setFixedSize(14,14)
         footer.addWidget(self.size_grip,0,Qt.AlignmentFlag.AlignBottom)
@@ -381,11 +387,11 @@ class StudyWindow(QMainWindow):
             QMainWindow, QWidget { background: transparent; color: #e8edf8; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
             QLabel#brand { font-size: 17px; font-weight: 650; }
             QLabel#brandMark { border-radius: 10px; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #b6a0ff,stop:1 #79d6e2); color: #152338; font-size: 17px; font-weight: 800; }
-            QLabel#muted { color: #c3cfe3; font-size: 12px; }
-            QLabel#eyebrow { color: #c3cfe3; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
-            QLabel#requestFeedback { color: #edf2ff; background: rgba(18,27,45,220); border: 1px solid #7384a3; border-radius: 9px; padding: 8px; font-size: 12px; }
+            QLabel#muted { color: #d0dcf0; font-size: 12px; }
+            QLabel#eyebrow { color: #d0dcf0; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
+            QLabel#requestFeedback { color: #edf2ff; background: rgba(18,27,45,115); border: 1px solid rgba(190,213,246,45); border-radius: 9px; padding: 8px; font-size: 12px; }
             QPushButton#routeBadge { color: #93e5ce; font-size: 11px; font-weight: 600; background: rgba(90,220,180,18); border: 1px solid rgba(115,231,194,35); border-radius: 9px; padding: 5px 9px; }
-            QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,165); color: #e8edf8; placeholder-text-color: #c3cfe3; border: 1px solid rgba(177,199,239,55); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
+            QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,125); color: #f0f4fc; placeholder-text-color: #d0dcf0; border: 1px solid rgba(177,199,239,40); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
             QPlainTextEdit { font-size: 14px; }
             QComboBox { padding: 6px 10px; }
             QComboBox QAbstractItemView { background: #1d263b; color: #e8edf8; selection-background-color: #454d78; }
@@ -444,6 +450,7 @@ class StudyWindow(QMainWindow):
         self.provider.succeeded.connect(self.receive_answer)
         self.provider.failed.connect(self.receive_error)
         self.provider.quota_received.connect(self.receive_quota)
+        if hasattr(self.provider,'partial'):self.provider.partial.connect(self.receive_partial)
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
         self.save_setup_button.clicked.connect(self.save_setup)
@@ -505,7 +512,7 @@ class StudyWindow(QMainWindow):
         if not self.connection_done.isEnabled():
             return
         self.settings_toggle.setChecked(False)
-        self.status.setText('Session key entered. No test request was sent. Choose your display and question, then Capture & ask.')
+        self.show_feedback('Session key ready. No test request sent. Capture a screen or open Voice to ask text only.')
         self.question.setFocus()
 
     def open_key_help(self):
@@ -786,8 +793,8 @@ class StudyWindow(QMainWindow):
         QTimer.singleShot(0,self,lambda:self.scroll.ensureWidgetVisible(self.answer) if self.isVisible() else None)
 
     def collapse_overlay(self, collapsed):
-        self.brand_name.setVisible(not collapsed)
-        self.status.setVisible(not collapsed)
+        self.brand_name.setVisible(not collapsed and self.width()>=580)
+        self.status.hide()
         self.size_grip.setVisible(not collapsed)
         self.feedback.setVisible(not collapsed and bool(self.feedback.text()))
         self.centralWidget().compact = collapsed
@@ -799,8 +806,8 @@ class StudyWindow(QMainWindow):
             self.collapse_button.setAccessibleName('Expand answer panel')
             self.root_layout.setContentsMargins(20,14,20,12)
             self.root_layout.setSpacing(6)
-            self.setMinimumSize(360,90)
-            self.resize(360,90)
+            self.setMinimumSize(420,90)
+            self.resize(420,90)
         else:
             self.scroll.show()
             self.collapse_button.setText('−')
@@ -860,7 +867,7 @@ class StudyWindow(QMainWindow):
         config = provider_config(self.provider_choice.currentData())
         self.key.setPlaceholderText(config['label']+' key - session only')
         self.key.setAccessibleName(config['label']+' API key')
-        self.connection_info.setText(config['model']+' · '+config['endpoint'])
+        self.connection_info.setText(config['model']+' · '+config['endpoint']+'\nThe entered key is used by explicit requests. This button closes setup; it does not authenticate or send a test.')
         self.disclosure.setText(
             'OpenRouter and a selected upstream model receive the reviewed text/image. '
             'Only the free router is allowed, with zero-price caps and no paid fallback. '
@@ -963,6 +970,7 @@ class StudyWindow(QMainWindow):
 
     def set_busy(self, busy):
         self.busy = busy
+        if not busy:self.wait_timer.stop()
         self.capture_button.setVisible(not busy)
         self.top_cancel.setVisible(busy)
         self.update_capsule_status()
@@ -994,13 +1002,33 @@ class StudyWindow(QMainWindow):
         self.answer.clear()
         self.reveal_answer()
         self.copy_answer_button.setEnabled(False)
+        self.last_exchange = None
+        self.partial_answer = False
+        self.first_text_ms = None
+        self.request_clock.start()
         self.sent_question = question
         self.set_busy(True)
-        self.show_feedback('Waiting for '+PROVIDERS[self.provider_choice.currentData()]['label']+' · up to 60 seconds. Cancel is available below.')
+        self.update_wait_feedback()
+        self.wait_timer.start()
         try:
             self.provider.send(body,self.key.text(),self.provider_choice.currentData())
         except ValueError as exc:
             self.receive_error(str(exc))
+
+    def update_wait_feedback(self):
+        if not self.busy:return
+        seconds=self.request_clock.elapsed()/1000
+        state='Receiving answer' if self.partial_answer else 'Waiting for first text'
+        self.show_feedback(f'{state} · {seconds:.0f}s · Cancel above. Free-provider queues can vary.')
+
+    def receive_partial(self, text):
+        if not self.busy:return
+        if self.first_text_ms is None:self.first_text_ms=self.request_clock.elapsed()
+        self.partial_answer=True
+        cursor=self.answer.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertText(text)
+        self.update_wait_feedback()
 
     def receive_answer(self, text):
         if not self.busy:
@@ -1008,6 +1036,7 @@ class StudyWindow(QMainWindow):
         self.set_busy(False)
         self.consent.setChecked(False)
         self.answer.setPlainText(text)
+        self.partial_answer=False
         self.reveal_answer()
         self.last_exchange = (self.sent_question, text)
         self.followup_context = None
@@ -1016,7 +1045,9 @@ class StudyWindow(QMainWindow):
         self.copy_answer_button.setEnabled(True)
         self.review_toggle.setChecked(False)
         self.answer.setFocus()
-        self.show_feedback("Answer received. Model: "+(getattr(self.provider,"model_used","") or "not reported")+". Verify with a small example.")
+        timing=f'{self.request_clock.elapsed()/1000:.1f}s total' if self.request_clock.isValid() else ''
+        if self.first_text_ms is not None:timing+=f' · first text {self.first_text_ms/1000:.1f}s'
+        self.show_feedback('Answer received · '+timing+' · Model: '+(getattr(self.provider,'model_used','') or 'not reported'))
 
     def receive_error(self, message):
         if not self.busy:
@@ -1024,6 +1055,7 @@ class StudyWindow(QMainWindow):
         self.set_busy(False)
         self.consent.setChecked(False)
         if getattr(self.provider,'mode','answer')=='answer':self.reveal_answer()
+        if self.partial_answer and getattr(self.provider,'mode','answer')=='answer':message='Partial answer — not completed. '+message
         self.show_feedback(message,failed=True)
 
     def cancel_request(self):
@@ -1038,7 +1070,8 @@ class StudyWindow(QMainWindow):
         self.set_busy(False)
         self.consent.setChecked(False)
         self.show_feedback('Usage check cancelled. No model request was made.' if checking_usage else
-                           "Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
+                           ('Partial answer — cancelled locally. ' if self.partial_answer else 'Cancelled locally. ')+
+                           'A provider may still process what was already sent; cancellation does not reverse charges.')
 
     def closeEvent(self, event):
         self.save_setup()
@@ -1148,6 +1181,8 @@ class StudyWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if hasattr(self,'collapse_button'):
+            self.brand_name.setVisible(not self.collapse_button.isChecked() and self.width()>=580)
         self.update_window_shape()
         if hasattr(self, 'effects_timer'):
             self.effects_timer.start(0)

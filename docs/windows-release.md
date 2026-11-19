@@ -82,7 +82,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.9.2/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.9.2/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.10.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.10.0/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds
@@ -96,7 +96,7 @@ Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable
 
 ## Optional per-user installer
 
-The Windows CI artifact also includes an unsigned `StudyFrame-0.9.2-windows-x64-setup.exe`.
+The Windows CI artifact also includes an unsigned `StudyFrame-0.10.0-windows-x64-setup.exe`.
 It installs for the current user, adds a Start menu entry and an uninstaller, and
 does not auto-run or request admin rights. Close StudyFrame before upgrading or
 uninstalling; a running v0.9+ session blocks these operations rather than being
@@ -131,7 +131,7 @@ paid fallback was relaxed. Raw provider bodies are never echoed.
 For an explicit public-metadata transport check (no key/content/model request):
 
 ```powershell
-out/portable-v0.9.2/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
+out/portable-v0.10.0/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
 ```
 
 This contacts only OpenRouter's public models endpoint and checks HTTPS response
@@ -166,3 +166,30 @@ zero-price and data-collection-deny filters. Previously allow_fallbacks=false
 unnecessarily disabled even free-provider backup routing. This does not add
 client retries, paid alternatives or a bypass of platform/account quota. It can
 help only when another matching provider is available. Live success is unverified.
+
+
+## Streaming and latency
+
+Quick answer is the initial UI mode. The request asks for one to three sentences
+and honors an explicit format/length request over Explain's suggested lesson.
+Prompt instructions cannot guarantee every model follows them. The answer is
+plain text; Markdown is not executed or rendered as HTML.
+
+The Responses request now uses stream=true. Only output_text deltas are displayed;
+reasoning/keepalives/provider error bodies are not. A completed response event is
+required for success, copy/follow-up and the authoritative final text. EOF,
+incomplete/failed events, cancellation or the hard 60-second deadline leave any
+text explicitly partial. No auto retry. The existing 1 MiB total wire cap also
+covers comments and events; arbitrary byte/UTF-8 chunks and multiline data are
+handled. JSON-only successful replies remain supported for compatible providers.
+Quota checks remain non-streaming metadata-only GET requests.
+
+First-text and total elapsed times are session-only observations, not provider
+benchmarks. Streaming removes the wait-for-whole-answer display behavior; it
+cannot remove free-provider queue/first-token delays or guarantee faster service.
+No paid routing, lowered privacy filters or background warmup requests are used.
+The key field is used by explicit requests as entered; Use this session key just
+closes setup and clears stale failure feedback, without a connection test.
+A timeout/incomplete answer is not evidence that the key was absent or invalid.
+
+Primary protocol: [OpenRouter streaming documentation](https://github.com/OpenRouterTeam/docs/blob/main/api_reference/streaming.mdx).

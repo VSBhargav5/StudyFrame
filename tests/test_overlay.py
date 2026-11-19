@@ -47,7 +47,7 @@ class OverlayTests(unittest.TestCase):
 
     def test_small_overlay_keeps_primary_window_controls_inside_the_surface(self):
         self.window.resize(470,580);self.app.processEvents()
-        for button in (self.window.capture_button,self.window.settings_toggle,self.window.collapse_button,self.window.close_button):
+        for button in (self.window.voice_button,self.window.capture_button,self.window.settings_toggle,self.window.collapse_button,self.window.close_button):
             corner=button.mapTo(self.window,button.rect().bottomRight())
             self.assertLess(corner.x(),self.window.width());self.assertLess(corner.y(),self.window.height())
         self.assertEqual(self.window.scroll.horizontalScrollBar().maximum(),0)

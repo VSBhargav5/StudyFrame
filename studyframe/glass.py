@@ -26,9 +26,9 @@ class GlassPanel(QWidget):
         surface = QLinearGradient(area.topLeft(), area.bottomRight())
         # Frost alone does not guarantee readable text over a white application.
         # Keep a dark material floor without sampling the user's desktop.
-        surface.setColorAt(0, QColor(34, 42, 65, 214 if self.native_material else 224))
-        surface.setColorAt(0.55, QColor(16, 23, 36, 228 if self.native_material else 238))
-        surface.setColorAt(1, QColor(21, 26, 43, 218 if self.native_material else 228))
+        surface.setColorAt(0, QColor(34, 42, 65, 182 if self.native_material else 212))
+        surface.setColorAt(0.55, QColor(16, 23, 36, 196 if self.native_material else 224))
+        surface.setColorAt(1, QColor(21, 26, 43, 184 if self.native_material else 216))
         painter.fillPath(path, surface)
         painter.save()
         painter.setClipPath(path)

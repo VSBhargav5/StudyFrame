@@ -51,7 +51,7 @@ def main(argv=None):
             window = StudyWindow(OfflineProvider(), preferences=store, start_collapsed=True)
             window.setWindowTitle('StudyFrame — synthetic offline self-test')
             window.show(); app.processEvents()
-            assert window.width() <= 380 and window.height() <= 105
+            assert window.width() <= 440 and window.height() <= 105
             checks.append('native-capsule-startup')
             if app.platformName() == 'windows' and sys.getwindowsversion().build >= 22000:
                 # Freeze missing bindings/tables must fail the build, not silently
