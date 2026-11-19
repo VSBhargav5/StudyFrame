@@ -33,7 +33,7 @@ def payload(text, attachment=None, provider="openai"):
         content.append({"type": "input_image", "detail": "auto",
                         "image_url": f"data:image/{attachment.format};base64,{encoded}"})
     body = {"model": config['model'], "input": [{"role": "user", "content": content}],
-            "store": False, "max_output_tokens": 1500}
+            "store": False, "max_output_tokens": 1500, "stream": True}
     if provider == 'openrouter_free':body['provider'] = FREE_POLICY
     return json.dumps(body).encode('utf-8')
 
@@ -74,7 +74,7 @@ def quota_from_response(data):
 
 
 def retry_after_hint(reply):
-    value=bytes(reply.rawHeader(b'Retry-After'))
+    value=bytes(reply.rawHeader('Retry-After'))
     if value.isdigit() and len(value)<=5 and 0<int(value)<=86400:
         return f' Provider asks to wait at least {int(value)} seconds before a manual retry.'
     return ''
@@ -84,6 +84,7 @@ class StudyProvider(QObject):
     succeeded = Signal(str)
     failed = Signal(str)
     quota_received = Signal(str)
+    partial = Signal(str)
 
     def __init__(self, parent=None, manager=None):
         super().__init__(parent)
@@ -93,6 +94,9 @@ class StudyProvider(QObject):
         self.provider_id = 'openai'
         self.mode = 'answer'
         self.buffer = bytearray()
+        self.stream_cursor = 0
+        self.stream_lines = []
+        self.stream_result = None
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.timeout)
@@ -106,10 +110,10 @@ class StudyProvider(QObject):
         if provider == 'openrouter_free':
             try:record = json.loads(body)
             except (ValueError,TypeError):raise ValueError('Prepare the free-model request again.') from None
-            if (not isinstance(record,dict) or set(record) != {'model','input','store','max_output_tokens','provider'}
+            if (not isinstance(record,dict) or set(record) != {'model','input','store','max_output_tokens','provider','stream'}
                     or record.get('model') != 'openrouter/free' or record.get('provider') != FREE_POLICY
                     or record.get('store') is not False or type(record.get('max_output_tokens')) is not int
-                    or record['max_output_tokens'] != 1500):
+                    or record['max_output_tokens'] != 1500 or record.get('stream') is not True):
                 raise ValueError('The free route requires its fixed model and zero-price policy.')
         self.model_used = ''
         self.mode = 'answer'
@@ -133,6 +137,9 @@ class StudyProvider(QObject):
 
     def watch(self, reply, deadline):
         self.buffer.clear()
+        self.stream_cursor = 0
+        self.stream_lines = []
+        self.stream_result = None
         self.reply = reply
         reply.setReadBufferSize((MAX_QUOTA_RESPONSE if self.mode=='quota' else MAX_RESPONSE) + 1)
         reply.readyRead.connect(lambda: self.read(reply))
@@ -147,6 +154,48 @@ class StudyProvider(QObject):
         if len(self.buffer) > limit:
             self.cancel()
             self.failed.emit('The usage response exceeded the 32 KiB limit.' if self.mode=='quota' else "The response exceeded the 1 MiB limit.")
+        elif self.is_stream(reply):
+            try:self.read_stream()
+            except ValueError as exc:
+                self.cancel()
+                self.failed.emit(str(exc))
+
+    def is_stream(self, reply):
+        return (self.mode=='answer' and reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)==200
+                and bytes(reply.rawHeader('Content-Type')).split(b';')[0].strip().lower()==b'text/event-stream')
+
+    def read_stream(self):
+        # Parse complete SSE lines only; UTF-8 may span arbitrary network chunks.
+        while True:
+            end=self.buffer.find(b'\n',self.stream_cursor)
+            if end<0:return
+            line=bytes(self.buffer[self.stream_cursor:end]).rstrip(b'\r')
+            self.stream_cursor=end+1
+            if line.startswith(b'data:'):
+                self.stream_lines.append(line[5:].removeprefix(b' '))
+            elif not line and self.stream_lines:
+                data=b'\n'.join(self.stream_lines);self.stream_lines=[]
+                if data==b'[DONE]':continue
+                try:
+                    event=json.loads(data)
+                    if not isinstance(event,dict):raise ValueError()
+                except (ValueError,UnicodeError):
+                    raise ValueError('The provider returned an unreadable answer stream.') from None
+                kind=event.get('type')
+                if kind in ('response.failed','response.incomplete','error'):
+                    raise ValueError('The answer stream did not complete. Any displayed text is partial; nothing was retried.')
+                if self.stream_result is not None:
+                    if kind=='response.output_text.delta':raise ValueError('The provider sent text after completion.')
+                    continue
+                if kind=='response.output_text.delta':
+                    text=event.get('delta')
+                    if not isinstance(text,str):raise ValueError('The provider returned an unreadable text fragment.')
+                    self.partial.emit(text)
+                elif kind=='response.completed':
+                    result=event.get('response')
+                    # Completion is authoritative; deltas alone never count as success.
+                    answer_from_response(json.dumps(result).encode('utf-8'))
+                    self.stream_result=result
 
     def finish(self, reply):
         if reply is not self.reply:
@@ -158,6 +207,7 @@ class StudyProvider(QObject):
         self.timer.stop()
         status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
         error = reply.error()
+        streaming=self.is_stream(reply)
         data = bytes(self.buffer)
         self.buffer.clear()
         hint=retry_after_hint(reply) if status in (429,503) else ''
@@ -189,6 +239,10 @@ class StudyProvider(QObject):
             else:self.quota_received.emit(summary)
             return
         try:
+            if streaming:
+                if self.stream_result is None:
+                    raise ValueError('The answer stream ended before completion. Any displayed text is partial; nothing was retried.')
+                data=json.dumps(self.stream_result).encode('utf-8')
             answer = answer_from_response(data)
         except ValueError as exc:
             self.failed.emit(str(exc))

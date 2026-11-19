@@ -2,7 +2,7 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.9.2: free-usage diagnostics and visible request feedback.** StudyFrame opens
+**v0.10: streaming answers, quick replies and a unified glass toolbar.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Prepare audio, choose a device,
 Listen, wait for Listening now, speak, Stop, then review/edit the local
@@ -28,8 +28,9 @@ and a trusted local model. A model-provider key is needed only for AI answers.
 
 An authorized real default-playback loopback test recognized the public sample’s opening digits after unmuting. Offline regressions also verify the recognition path;
 recognition made errors on later sample digits. Microphone quality, other playback devices, live AI quality and personal usefulness remain unverified. No personal audio was
-recorded by the agent. A user-run OpenRouter attempt returned HTTP429; no successful
-live AI answer has been verified. RoleWeave remains paused.
+recorded by the agent. User-run free-route trials produced a correct text answer and
+a correct screen answer for print(2 + 3), alongside a timeout. This is limited
+synthetic evidence, not a general quality or latency benchmark. RoleWeave stays paused.
 
 Requests now expand/reveal the answer and show progress or a fixed, privacy-safe
 error banner. Preview scrolls to the captured image. HTTP status codes distinguish
@@ -40,6 +41,15 @@ to request only your reported daily counters, without a model call or study cont
 Per-minute and individual-provider limits can still apply with daily quota left.
 Provider-supplied numeric retry delays are shown; the app does not retry for you.
 
+Quick answer is now the default: direct, short replies. Explain/Hint/Debug remain
+available. An explicit length request takes priority over the mode's lesson
+structure. Answers stream as text arrives, with first-text and total timings in
+memory only. Partial text stays labelled if the stream fails; it cannot become a
+follow-up exchange. Streaming does not shorten an upstream queue or guarantee
+instant free-model replies. Capture and Voice share the header in both layouts;
+there is one status banner, with a lighter native glass tint and a readable
+fallback. [Streaming contract and limits](docs/windows-release.md#streaming-and-latency).
+
 ## First use
 
 The capsule initially says **Connect model**. Model setup appears at the top.
@@ -48,7 +58,7 @@ key inside the app, then **Use this session key**; this sends no test request.
 Without a key you can still prepare audio and transcribe locally.
 OpenRouter free routing is the default; account creation/key entry are your own
 actions. [OpenRouter key page](https://openrouter.ai/settings/keys). Availability
-and free-model limits vary; the user-run trial returned HTTP429, with no answer yet.
+and free-model limits vary; user trials have returned both answers and failures.
 
 ## Open the Windows portable app
 

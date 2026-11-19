@@ -69,7 +69,7 @@ class EffectsLifecycleTests(unittest.TestCase):
         window = StudyWindow(start_collapsed=True)
         self.addCleanup(window.deleteLater); self.addCleanup(window.close)
         window.show(); self.app.processEvents()
-        self.assertLessEqual(window.width(), 380)
+        self.assertLessEqual(window.width(), 440)  # Both Voice and Capture stay in the capsule.
         self.assertLessEqual(window.height(), 105)
         self.assertTrue(window.scroll.isHidden())
         self.assertTrue(window.centralWidget().compact)

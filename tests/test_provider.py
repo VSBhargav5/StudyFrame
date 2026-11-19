@@ -29,7 +29,7 @@ class Reply(QObject):
         self.headers = {}
 
     def rawHeader(self, name):
-        return self.headers.get(name,b'')
+        return self.headers.get(name.encode() if isinstance(name,str) else name,b'')
 
     def read(self, size):
         result, self.data = self.data[:size], self.data[size:]
@@ -72,6 +72,7 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(base64.b64decode(content[1]["image_url"].split(",")[1]), b"snapshot")
         self.assertFalse(body["store"])
         self.assertEqual(body["max_output_tokens"], 1500)
+        self.assertIs(body['stream'],True)
         self.assertNotIn("tools", body)
 
     def test_text_only_has_no_image(self):
