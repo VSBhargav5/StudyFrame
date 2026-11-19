@@ -26,6 +26,10 @@ class Reply(QObject):
     def __init__(self, data=b"", status=200):
         super().__init__()
         self.data, self.status, self.aborted = data, status, False
+        self.headers = {}
+
+    def rawHeader(self, name):
+        return self.headers.get(name,b'')
 
     def read(self, size):
         result, self.data = self.data[:size], self.data[size:]

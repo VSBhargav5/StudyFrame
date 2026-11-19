@@ -274,6 +274,9 @@ class StudyWindow(QMainWindow):
         self.connection_done = QPushButton('Use this session key')
         self.connection_done.setEnabled(False)
         settings.addWidget(self.connection_done)
+        self.quota_button = QPushButton('Check free usage · no model request')
+        self.quota_button.setEnabled(False)
+        settings.addWidget(self.quota_button)
         self.disclosure = QLabel()
         self.disclosure.setWordWrap(True)
         self.disclosure.setObjectName('muted')
@@ -414,6 +417,7 @@ class StudyWindow(QMainWindow):
         self.settings_toggle.toggled.connect(self.show_settings)
         self.provider_badge.clicked.connect(lambda: self.settings_toggle.setChecked(True))
         self.connection_done.clicked.connect(self.finish_connection)
+        self.quota_button.clicked.connect(self.check_free_usage)
         self.key_help.clicked.connect(self.open_key_help)
         self.review_toggle.toggled.connect(self.show_review)
         self.collapse_button.toggled.connect(self.collapse_overlay)
@@ -439,6 +443,7 @@ class StudyWindow(QMainWindow):
         self.cancel_button.clicked.connect(self.cancel_request)
         self.provider.succeeded.connect(self.receive_answer)
         self.provider.failed.connect(self.receive_error)
+        self.provider.quota_received.connect(self.receive_quota)
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
         self.save_setup_button.clicked.connect(self.save_setup)
@@ -491,6 +496,7 @@ class StudyWindow(QMainWindow):
         key = self.key.text()
         valid = bool(key) and key.isascii() and not any(c.isspace() or ord(c)<32 or ord(c)==127 for c in key)
         self.connection_done.setEnabled(valid and not self.busy)
+        self.quota_button.setEnabled(valid and not self.busy and not self.speech.active and self.provider_choice.currentData()=='openrouter_free')
         self.capture_button.setText('Capture && ask' if valid else 'Connect model')
         self.provider_badge.setText(('Key entered' if valid else 'Connect') +
                                     (' · free' if self.provider_choice.currentData() == 'openrouter_free' else ' · paid'))
@@ -506,6 +512,20 @@ class StudyWindow(QMainWindow):
         url = ('https://openrouter.ai/settings/keys' if self.provider_choice.currentData()=='openrouter_free'
                else 'https://platform.openai.com/api-keys')
         QDesktopServices.openUrl(QUrl(url))
+
+    def check_free_usage(self):
+        if self.busy or self.speech.active or not self.quota_button.isEnabled():return
+        self.set_busy(True)
+        self.show_feedback('Checking OpenRouter usage metadata only. No question, image, audio or model request is sent.')
+        try:
+            self.provider.check_quota(self.key.text())
+            self.update_capsule_status()
+        except ValueError as exc:self.receive_error(str(exc))
+
+    def receive_quota(self, text):
+        if not self.busy:return
+        self.set_busy(False)
+        self.show_feedback(text)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -605,7 +625,8 @@ class StudyWindow(QMainWindow):
             phase = getattr(self.speech, 'phase', '')
             audio = {'preparing':'Preparing audio', 'starting':'Starting audio', 'listening':'Listening now',
                      'stopping':'Finishing audio'}.get(phase, 'Audio active')
-            prefix = (audio if self.speech.active else 'Thinking' if self.busy else 'Request failed · expand' if self.request_failed else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
+            working='Checking usage' if getattr(self.provider,'mode','answer')=='quota' else 'Thinking'
+            prefix = (audio if self.speech.active else working if self.busy else 'Request failed · expand' if self.request_failed else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
         self.privacy_badge.setText(prefix + self.capture_state)
 
     def open_voice(self):
@@ -663,6 +684,7 @@ class StudyWindow(QMainWindow):
         self.capture_button.setEnabled(not self.busy and not active)
         self.prepare_button.setEnabled(not self.busy and not active)
         self.update_send()
+        self.update_connection()
         self.update_capsule_status()
 
     def discard_speech(self):
@@ -842,6 +864,7 @@ class StudyWindow(QMainWindow):
         self.disclosure.setText(
             'OpenRouter and a selected upstream model receive the reviewed text/image. '
             'Only the free router is allowed, with zero-price caps and no paid fallback. '
+            'OpenRouter may try another eligible free provider; the app does not resubmit automatically. '
             'Providers disallowing data collection are requested; this is not a zero-retention guarantee. '
             'Availability and limits vary. A follow-up includes the displayed previous exchange.'
             if self.provider_choice.currentData() == 'openrouter_free' else
@@ -1000,10 +1023,11 @@ class StudyWindow(QMainWindow):
             return
         self.set_busy(False)
         self.consent.setChecked(False)
-        self.reveal_answer()
+        if getattr(self.provider,'mode','answer')=='answer':self.reveal_answer()
         self.show_feedback(message,failed=True)
 
     def cancel_request(self):
+        checking_usage=self.busy and getattr(self.provider,'mode','answer')=='quota'
         self.direct_request = None
         if self.pending_screen is not None:
             self.capture_timer.stop()
@@ -1013,7 +1037,8 @@ class StudyWindow(QMainWindow):
         self.provider.cancel()
         self.set_busy(False)
         self.consent.setChecked(False)
-        self.show_feedback("Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
+        self.show_feedback('Usage check cancelled. No model request was made.' if checking_usage else
+                           "Cancelled locally. A provider may still process what was already sent; cancellation does not reverse charges.")
 
     def closeEvent(self, event):
         self.save_setup()

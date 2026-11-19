@@ -2,7 +2,7 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.9.1: visible capture/request feedback for the Windows MVP.** StudyFrame opens
+**v0.9.2: free-usage diagnostics and visible request feedback.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Prepare audio, choose a device,
 Listen, wait for Listening now, speak, Stop, then review/edit the local
@@ -28,11 +28,17 @@ and a trusted local model. A model-provider key is needed only for AI answers.
 
 An authorized real default-playback loopback test recognized the public sample’s opening digits after unmuting. Offline regressions also verify the recognition path;
 recognition made errors on later sample digits. Microphone quality, other playback devices, live AI quality and personal usefulness remain unverified. No personal audio was
-recorded or live model call made. RoleWeave remains paused.
+recorded by the agent. A user-run OpenRouter attempt returned HTTP429; no successful
+live AI answer has been verified. RoleWeave remains paused.
 
 Requests now expand/reveal the answer and show progress or a fixed, privacy-safe
 error banner. Preview scrolls to the captured image. HTTP status codes distinguish
 key, rate-limit and compatible-provider failures instead of leaving a blank area.
+
+For HTTP429, pause repeated attempts. Open model settings and **Check free usage**
+to request only your reported daily counters, without a model call or study content.
+Per-minute and individual-provider limits can still apply with daily quota left.
+Provider-supplied numeric retry delays are shown; the app does not retry for you.
 
 ## First use
 
@@ -42,7 +48,7 @@ key inside the app, then **Use this session key**; this sends no test request.
 Without a key you can still prepare audio and transcribe locally.
 OpenRouter free routing is the default; account creation/key entry are your own
 actions. [OpenRouter key page](https://openrouter.ai/settings/keys). Availability
-and free-model limits vary; no live AI trial has been performed.
+and free-model limits vary; the user-run trial returned HTTP429, with no answer yet.
 
 ## Open the Windows portable app
 
@@ -133,7 +139,7 @@ first, use **Preview**, prepare the request, approve its text/image and
 
 - Default: `https://openrouter.ai/api/v1/responses`, model `openrouter/free`.
   The server chooses an eligible free model, including image capability for images.
-  Requests set zero price caps, disable provider fallbacks and request providers
+  Requests set zero price caps, allow only zero-price provider fallbacks and request providers
   disallowing data collection. An unavailable eligible route fails; the app never
   switches to paid OpenAI. This policy is not a zero-retention guarantee or a live
   compatibility/availability claim. Selected model metadata is shown if returned.
