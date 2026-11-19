@@ -33,16 +33,35 @@ class PipeStop:
                                               ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
         self.kernel.PeekNamedPipe.restype = ctypes.c_int32
         self.stopped = False
+        self.buffer = bytearray()
+
+    def command(self):
+        if b'\n' not in self.buffer:
+            available = self.ctypes.c_uint32()
+            if not self.kernel.PeekNamedPipe(self.handle, None, 0, None, self.ctypes.byref(available), None):
+                return 'stop'
+            if available.value:
+                self.buffer.extend(os.read(self.fd, min(available.value, 4096)))
+        if len(self.buffer) > 4096:
+            raise ValueError('Invalid control command')
+        if b'\n' in self.buffer:
+            line, _, tail = self.buffer.partition(b'\n')
+            self.buffer = bytearray(tail)
+            if line in (b'listen', b'stop'):
+                return line.decode('ascii')
+            command=json.loads(line)
+            if (not isinstance(command,dict) or set(command)!={'listen'} or
+                not isinstance(command['listen'],str) or not 0<len(command['listen'])<=512 or
+                any(ord(c)<32 for c in command['listen'])):
+                raise ValueError('Invalid control command')
+            return command
+        return None
 
     def is_set(self):
         if self.stopped:
             return True
-        available = self.ctypes.c_uint32()
-        if not self.kernel.PeekNamedPipe(self.handle, None, 0, None, self.ctypes.byref(available), None):
-            self.stopped = True  # Closed/invalid parent pipe fails closed.
-        elif available.value:
-            os.read(self.fd, min(available.value, 16))
-            self.stopped = True
+        if self.command() is not None:
+            self.stopped = True  # Any command while recording ends the clip.
         return self.stopped
 
 
@@ -58,7 +77,14 @@ def pcm16(block):
     return (np.clip(mono, -1, 1) * 32767).astype('<i2').tobytes()
 
 
-def choose_device(sc, source):
+def choose_device(sc, source, device_id=None):
+    if source not in ('microphone','loopback'):
+        raise ValueError('Unknown source')
+    if device_id is not None:
+        device=sc.get_microphone(id=device_id,include_loopback=True)
+        if device is None or device.id!=device_id or bool(device.isloopback)!=(source=='loopback'):
+            raise ValueError('The exact selected audio device is unavailable')
+        return device
     if source == 'microphone':
         device = sc.default_microphone()
         if device is None or device.isloopback:
@@ -73,6 +99,23 @@ def choose_device(sc, source):
             raise ValueError('No exact playback loopback')
         return device
     raise ValueError('Unknown source')
+
+
+def device_options(sc, source):
+    if source not in ('microphone','loopback'):
+        raise ValueError('Unknown source')
+    options=[]
+    for device in sc.all_microphones(include_loopback=source=='loopback'):
+        if bool(device.isloopback)!=(source=='loopback'):
+            continue
+        if (not isinstance(device.id,str) or not 0<len(device.id)<=512 or
+            not isinstance(device.name,str) or not 0<len(device.name)<=128 or
+            any(ord(c)<32 for c in device.id+device.name)):
+            raise ValueError('Unsupported audio device metadata')
+        options.append({'id':device.id,'name':device.name})
+        if len(options)>64: raise ValueError('Too many audio devices')
+    if len({x['id'] for x in options})!=len(options): raise ValueError('Ambiguous audio devices')
+    return options
 
 
 def recognize(device, recognizer, stop, emit, *, clock=time.monotonic):
@@ -108,11 +151,37 @@ def recognize(device, recognizer, stop, emit, *, clock=time.monotonic):
     return ' '.join(piece for piece in pieces if piece).strip()
 
 
+def warm_session(sc, source, recognizer, stop, emit):
+    """Keep the recognizer ready, opening audio only after explicit Listen."""
+    options=json.dumps(device_options(sc,source))
+    if len(options)>32768: raise ValueError('Audio device list too large')
+    emit('devices',options)
+    while True:
+        emit('ready', 'Local recognizer ready. Click Listen, then wait for Listening now before speaking.')
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            command = stop.command()
+            if command == 'stop':
+                return
+            if command == 'listen' or isinstance(command,dict):
+                break
+            time.sleep(0.02)
+        else:
+            return
+        stop.stopped = False
+        recognizer.Reset()
+        device = choose_device(sc, source, command.get('listen') if isinstance(command,dict) else None)
+        emit('status', 'Starting the selected audio stream. Wait for Listening now before speaking.')
+        text = recognize(device, recognizer, stop, emit)
+        emit('transcript', text)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', choices=['microphone', 'loopback'], required=True)
     parser.add_argument('--model', required=True)
     parser.add_argument('--check-only', action='store_true', help='Check local imports/model without opening any audio device')
+    parser.add_argument('--warm', action='store_true', help='Prepare locally, then wait for an explicit Listen command')
     args = parser.parse_args(argv)
     def emit(kind, text):
         print(json.dumps({'type': kind, 'text': text}), flush=True)
@@ -130,6 +199,11 @@ def main(argv=None):
         if args.check_only:
             recognizer.AcceptWaveform(b'\0' * 3200)
             emit('transcript', 'Local speech backend ready.')
+            return 0
+        if args.warm:
+            # Model loading is complete before Listen becomes available. Do not
+            # open a recorder during preparation or while waiting between clips.
+            warm_session(sc, args.source, recognizer, stop, emit)
             return 0
         if stop.is_set():
             emit('transcript', '')

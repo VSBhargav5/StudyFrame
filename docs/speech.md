@@ -1,10 +1,16 @@
 # Hear a question, review the transcript, get a text answer
 
-In v0.6, **Voice** opens local speech controls. Choose **Computer audio** (default
-playback output) or **Microphone** (default input), then **Listen**. **Stop** ends
-early; otherwise recording ends after 30 seconds. The capsule also offers Stop
-audio while listening. Discard/Clear/Close kill the worker and discard its result.
-There is no startup recording, simultaneous mixed source or automatic restart.
+In v0.9, open **Voice**, choose **Computer audio** or **Microphone**, and click
+**Prepare audio**. This loads the recognizer and lists devices without opening a
+recording stream. When Ready, optionally choose a named device, then **Listen**.
+Start speaking only when **Listening now** appears. Preparation and Starting audio
+are deliberately separate from recording: the earlier app loaded the model after
+the click, which could lose speech spoken during startup.
+
+**Stop** ends early; otherwise recording ends after 30 seconds. The loaded model
+stays ready between clips for up to 90 seconds of inactivity, so repeated questions
+do not reload it. Discard/Clear/Close or source/model changes release it. Preparing
+never auto-starts recording, and no key is needed for any local transcription.
 
 Review and correct the editable transcript, then **Ask text only**. That button
 authorizes one request containing the transcript and chosen learning style. It
@@ -12,11 +18,11 @@ does not send raw audio, screenshots, notes or an earlier conversation. The text
 answer appears in the existing answer panel. A missing model key opens connection
 settings without transmission. Transcription itself needs no API key or account.
 
-Computer audio captures all playback on the selected default output, not just a
-particular video or browser tab. The microphone captures its input. Devices are
-resolved once per session with no silent fallback between microphone and playback;
-changing the Windows default during a session does not switch the active source.
-Hardware permission/driver failures are reported rather than replaced by fake text.
+Computer audio captures all playback on the chosen output, not one tab. Pick
+Windows default or a named device from the list populated by Prepare audio. Named
+devices resolve by exact ID and source type; a missing device fails rather than
+falling back to another microphone/output. Selection stays session-only; provider,
+source, model folder and pinning remain the only saved preferences. No mixed source.
 
 ## One-time Windows x64 setup
 
@@ -40,8 +46,8 @@ the ZIP or its parent. Model folder, audio source, provider and pinning are reme
 elsewhere may need you to choose the folder. Use Save setup in connection settings or close normally to save them. Keys, questions, transcripts and approval are never saved; capture exclusion starts on again. The selected model determines language.
 
 The current local checkout already has the optional dependencies and that small
-English model installed for development verification. They are not bundled into
-Git, a standalone installer or CI. Windows ARM and unusual devices are unverified.
+English model installed for development verification. Model weights are not committed to Git or included in CI artifacts; the local
+portable development package includes the explicitly selected small English model. Windows ARM and unusual devices are unverified.
 
 ## Privacy and limits
 
@@ -55,8 +61,8 @@ or recording tool, and it does not control audio captured by other applications.
 
 SoundCard reads Windows WASAPI channels, then the worker downmixes to 16-kHz
 little-endian signed PCM16 for Vosk. Mono devices use a duplicate channel map to
-avoid SoundCard's documented single-channel issue. Hardware/model loading is
-bounded by a 45-second parent deadline; stopping allows three seconds to finalize,
+avoid SoundCard's documented single-channel issue. Model preparation/startup is
+bounded by a 45-second parent deadline; the ready worker expires after 90 idle seconds; stopping allows three seconds to finalize,
 then kills a stalled worker. Cancellation ignores late results. Output is capped
 at 64 KiB and transcripts at 4,000 characters; unsupported data fails closed.
 
