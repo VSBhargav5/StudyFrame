@@ -49,6 +49,7 @@ class StudyWindow(QMainWindow):
         self.effects_timer.timeout.connect(self.update_window_effects)
         self.native_backdrop = None
         self.backdrop_attempted = False
+        self.screen_handle = None
         self.setWindowTitle(f"StudyFrame {__version__} - Screen companion")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -199,9 +200,11 @@ class StudyWindow(QMainWindow):
         voice.addWidget(self.speech_model)
         actions = QHBoxLayout()
         self.speech_browse = QPushButton('Model folder…')
+        self.speech_prepare = QPushButton('Prepare audio')
         self.speech_record = QPushButton('Listen')
+        self.speech_record.setEnabled(False)
         self.speech_discard = QPushButton('Discard')
-        for button in (self.speech_browse, self.speech_record, self.speech_discard): actions.addWidget(button)
+        for button in (self.speech_browse, self.speech_prepare, self.speech_record, self.speech_discard): actions.addWidget(button)
         voice.addLayout(actions)
         self.speech_level = QProgressBar()
         self.speech_level.setRange(0,100)
@@ -211,7 +214,8 @@ class StudyWindow(QMainWindow):
         self.speech_level.setToolTip('Live signal level for the selected source. A flat meter can indicate muted or missing audio.')
         self.speech_level.setFixedHeight(5)
         voice.addWidget(self.speech_level)
-        self.speech_note = QLabel('Listen records up to 30 seconds from the selected source. Stop finishes early. '
+        self.speech_note = QLabel('Prepare audio loads the local model without recording. When Ready, click Listen '
+                                  'and speak only after Listening now appears. Clips last up to 30 seconds. '
                                   'Audio stays local; review/edit the transcript, then Ask text only. '
                                   'Optional setup: docs/speech.md.')
         self.speech_note.setObjectName('muted')
@@ -418,6 +422,9 @@ class StudyWindow(QMainWindow):
         self.voice_button.clicked.connect(self.open_voice)
         self.speech_browse.clicked.connect(self.choose_speech_model)
         self.speech_record.clicked.connect(self.record_speech)
+        self.speech_prepare.clicked.connect(self.prepare_speech)
+        self.speech_source.currentIndexChanged.connect(self.audio_setup_changed)
+        self.speech_model.textChanged.connect(self.audio_setup_changed)
         self.speech_discard.clicked.connect(self.discard_speech)
         self.ask_speech.clicked.connect(self.ask_transcript)
         self.speech_text.textChanged.connect(self.update_speech_controls)
@@ -442,6 +449,8 @@ class StudyWindow(QMainWindow):
         self.status.setText('Connect a model, then Capture & ask.')
         if start_collapsed:
             self.collapse_button.setChecked(True)
+        QApplication.instance().screenAdded.connect(self.display_changed)
+        QApplication.instance().screenRemoved.connect(self.display_changed)
 
     def save_setup(self):
         if self.preferences is None:
@@ -471,9 +480,34 @@ class StudyWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and handle is not self.screen_handle:
+            self.screen_handle = handle
+            handle.screenChanged.connect(self.display_changed)
+        self.fit_to_screen()
         # Window flags (pin/unpin) can recreate the HWND. Reapply on every show.
         self.update_window_effects()
         self.effects_timer.stop()
+
+    def fit_to_screen(self):
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            return
+        area = screen.availableGeometry().adjusted(8, 8, -8, -8)
+        if not area.isValid():
+            return
+        self.resize(min(self.width(), area.width()), min(self.height(), area.height()))
+        self.move(max(area.left(), min(self.x(), area.right()-self.width()+1)),
+                  max(area.top(), min(self.y(), area.bottom()-self.height()+1)))
+
+    def display_changed(self, *args):
+        if self.pending_screen is not None and self.pending_screen not in QApplication.screens():
+            self.cancel_request()
+            self.status.setText('The selected display disconnected. Choose a display before capturing again.')
+        self.refresh_screens()
+        self.update_receipt()
+        if self.isVisible():
+            self.fit_to_screen()
 
     def event(self, event):
         if event.type() in (QEvent.Type.WinIdChange, QEvent.Type.DevicePixelRatioChange,
@@ -539,7 +573,10 @@ class StudyWindow(QMainWindow):
     def update_capsule_status(self):
         prefix = ''
         if self.collapse_button.isChecked():
-            prefix = ('Listening' if self.speech.active else 'Thinking' if self.busy else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
+            phase = getattr(self.speech, 'phase', '')
+            audio = {'preparing':'Preparing audio', 'starting':'Starting audio', 'listening':'Listening now',
+                     'stopping':'Finishing audio'}.get(phase, 'Audio active')
+            prefix = (audio if self.speech.active else 'Thinking' if self.busy else 'Answer ready · expand' if self.answer.toPlainText() else 'StudyFrame') + ' · '
         self.privacy_badge.setText(prefix + self.capture_state)
 
     def open_voice(self):
@@ -555,6 +592,16 @@ class StudyWindow(QMainWindow):
         if folder:
             self.speech_model.setText(folder)
 
+    def audio_setup_changed(self):
+        self.speech.cancel()
+        self.speech_note.setText('Audio setup changed. Prepare audio before Listen; no recording started.')
+        self.update_speech_controls()
+
+    def prepare_speech(self):
+        if self.busy or self.speech.active:
+            return
+        self.speech.prepare(self.speech_source.currentData(), self.speech_model.text())
+
     def record_speech(self):
         if self.busy:
             return
@@ -563,14 +610,16 @@ class StudyWindow(QMainWindow):
             return
         self.speech_text.clear()
         self.speech_level.setValue(0)
-        self.speech.start(self.speech_source.currentData(), self.speech_model.text())
+        self.speech.listen()
 
     def update_speech_controls(self):
         active = self.speech.active
-        self.voice_button.setText('Stop audio' if active else 'Voice')
+        preparing = getattr(self.speech, 'phase', '') == 'preparing'
+        self.voice_button.setText('Cancel setup' if preparing else 'Stop audio' if active else 'Voice')
         self.voice_button.setEnabled(not self.busy)
-        self.speech_record.setText('Stop' if active else 'Listen')
-        self.speech_record.setEnabled(not self.busy)
+        self.speech_record.setText('Stop' if active and not preparing else 'Listen')
+        self.speech_record.setEnabled(not self.busy and (active and not preparing or getattr(self.speech, 'prepared', False)))
+        self.speech_prepare.setEnabled(not self.busy and not active)
         for widget in (self.speech_source, self.speech_model, self.speech_browse, self.speech_text):
             widget.setEnabled(not self.busy and not active)
         self.ask_speech.setEnabled(bool(self.speech_text.toPlainText().strip()) and not active and not self.busy)
@@ -683,6 +732,8 @@ class StudyWindow(QMainWindow):
             if self.expanded_size is not None:self.resize(self.expanded_size)
         self.update_capsule_status()
         self.update_window_shape()
+        if self.isVisible():
+            self.fit_to_screen()
 
     def capture_and_ask(self):
         if self.busy or self.speech.active:return
