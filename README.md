@@ -2,9 +2,10 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.8.1: readable dark frost, screen-and-voice companion.** StudyFrame opens
+**v0.9: usable screen-and-voice Windows MVP.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
-opens microphone/computer-playback controls. Listen, Stop, review/edit the local
+opens microphone/computer-playback controls. Prepare audio, choose a device,
+Listen, wait for Listening now, speak, Stop, then review/edit the local
 transcript, then **Ask text only** for a text answer. No raw audio or old screenshot
 is sent by that action. [Speech setup and workflow](docs/speech.md).
 
@@ -28,6 +29,16 @@ and a trusted local model. A model-provider key is needed only for AI answers.
 An authorized real default-playback loopback test recognized the public sample’s opening digits after unmuting. Offline regressions also verify the recognition path;
 recognition made errors on later sample digits. Microphone quality, other playback devices, live AI quality and personal usefulness remain unverified. No personal audio was
 recorded or live model call made. RoleWeave remains paused.
+
+## First use
+
+The capsule initially says **Connect model**. Model setup appears at the top.
+**Get your own key in browser** opens only the official provider page. Enter the
+key inside the app, then **Use this session key**; this sends no test request.
+Without a key you can still prepare audio and transcribe locally.
+OpenRouter free routing is the default; account creation/key entry are your own
+actions. [OpenRouter key page](https://openrouter.ai/settings/keys). Availability
+and free-model limits vary; no live AI trial has been performed.
 
 ## Open the Windows portable app
 
@@ -55,7 +66,7 @@ updates with `.\.venv\Scripts\python.exe -m pip install --no-deps .`.
 
 No Node.js, Electron, local server, or database is required. An API key is needed
 only for live AI requests. Dependencies
-are the pinned PySide6 Essentials and Shiboken wheels. Optional package install:
+include pinned Qt/Shiboken and Windows-only compositor bindings. Optional package install:
 `python -m pip install .` exposes the `studyframe` desktop entry point.
 
 ## What works

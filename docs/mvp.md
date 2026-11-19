@@ -1,39 +1,45 @@
-# A useful personal study session
+# StudyFrame Windows MVP scope and acceptance
 
-The recurring task: while learning Python or investigating a small coding issue,
-collect the visible example, explain what is confusing, and get a checkable next
-step without losing control of what leaves the computer.
+The target is a small desktop learning companion: capture a permitted example or
+hear a question, ask for an explanation, and check it without losing control of
+what leaves the machine. This is not a continuous screen/audio agent.
 
-## Current foundation
+## Implemented core paths
 
-Local image preview plus question/context preparation and an explicit OpenAI
-send/cancel path are implemented. Copying a prepared request still copies only
-text; Send includes the selected image. Provider behavior is mock-tested; no live
-answer or usefulness claim is established. See [AI workflow](ai-workflow.md).
-The image hash identifies the bytes selected for preview; it does not establish
-truth, correctness, completeness, or safe sharing.
+- Rounded frosted capsule, expanded answer, pin/collapse/clear, readable light/dark
+  material, and Windows capture exclusion with explicit capability status.
+- Visible model setup, official key-page action, session-only masked key, explicit
+  key-ready action that sends nothing. OpenRouter free route default; paid OpenAI
+  separately labelled. No automatic retries, redirects or paid fallback.
+- Fresh selected-display Capture & ask, or local preview/crop/prepared review/send.
+  Cancel disarms pending captures and ignores late replies; original content stays
+  local until an explicit send. Plain answers, copy and explicit follow-up context.
+- Audio preparation before recording, named/default microphone or playback device,
+  Listening now signal, Stop/Discard, bounded 30-second clips, reusable recognizer,
+  editable transcript and separate text-only ask. No automatic recording/upload.
+- Window fit within the monitor work area and safe pending-capture cancellation on
+  disconnect. Non-secret setup preferences; standalone portable build; optional
+  per-user unsigned installer with active-session and user-config preservation gates.
 
-## Next implementation gate
+## Acceptance that code generation cannot establish
 
-1. Review one provider's current image/text API and choose a model using explicit
-   requirements, costs and authorization. No automatic account linking.
-2. Show the exact image and text to send, destination, and an explicit Send action.
-   Run requests outside the UI thread; implement cancellation, timeout and useful
-   errors. Keep unsent input available after failures.
-3. Verify the selected snapshot is what gets sent. Provider mocks test transport
-   behavior; a live call requires separate authorization and is labeled as live.
-4. Try a known coding example: predict the result before asking, check the answer,
-   and record whether the explanation helped. Synthetic tests alone cannot show
-   model quality or personal usefulness.
-5. Check Windows foreground operation, file dialog, clipboard, DPI scaling and
-   keyboard access before preparing an installer.
+1. User retest of opening words: Prepare audio → Ready → Listen → Listening now,
+   then say a known synthetic sentence. Stop, compare first words, correct text.
+   Test the microphone and an explicitly permitted playback sample separately.
+   Model/driver accuracy and zero-latency capture are not guaranteed.
+2. Later, create your own OpenRouter key and enter it only inside the app. Use a
+   permitted synthetic example, predict range(3), explicitly send and verify the
+   explanation. No live key/account/model validation has been performed by us.
+3. Confirm the appearance and controls on your actual monitors, recording tool,
+   scaling and native dialogs. Synthetic results establish only the checked paths.
+4. Manually accept the installer on Windows if desired. CI lifecycle checks are
+   separate from your laptop. Signing and interrupted-upgrade recovery remain open.
 
-Only after that end-to-end study workflow is usable should this be called an AI
-MVP. Meeting audio/transcription/notes is a later opt-in slice. A database, local
-OCR, multiple providers, account system, agent framework and deployment are not
-needed for this foundation. A local-model option can be evaluated later against
-the actual machine and required quality, not assumed to be free or fast.
+Missing key/driver access must produce a useful error, never invented success.
+Demand, usefulness, learning, performance and revenue require evidence. No process
+hiding or exam-browser bypass. RoleWeave/SettleTrace/others remain paused.
 
-StudyFrame is the active portfolio sprint. SettleTrace remains paused at its
-verified v0.3; choose a deliberate switch back after the study MVP review.
-No revenue, adoption, performance, demand, or time-savings claim is established.
+For 60–90 minutes, use one synthetic sentence and trace preparation versus actual
+recording. Explain the tradeoff: loading once before Listen avoids a model-load
+pause, while the hardware stream still takes time to open. Do not speak before
+Listening now. No learning completion until you practice.

@@ -27,6 +27,7 @@ class SpeechSession(QObject):
     transcript = Signal(str)
     failed = Signal(str)
     level = Signal(int)
+    devices = Signal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -54,8 +55,11 @@ class SpeechSession(QObject):
         self.cancel()
         self.start(source, model, warm=True)
 
-    def listen(self):
+    def listen(self, device_id=None):
         if not self.prepared:
+            return
+        if device_id is not None and (not isinstance(device_id,str) or not 0<len(device_id)<=512 or any(ord(c)<32 for c in device_id)):
+            self.failed.emit('Choose a valid audio device.')
             return
         self.result = self.problem = None
         self.peak = self.total = 0
@@ -63,7 +67,7 @@ class SpeechSession(QObject):
         self.changed.emit(True)
         self.status.emit('Starting audio. Wait for Listening now before speaking.')
         self.deadline.start(45000)
-        self.process.write(b'listen\n')
+        self.process.write((json.dumps({'listen':device_id}).encode()+b'\n') if device_id is not None else b'listen\n')
 
     def start(self, source, model, *, check_only=False, warm=False):
         if self.process is not None:
@@ -154,9 +158,21 @@ class SpeechSession(QObject):
                 event = json.loads(line)
                 kind = event['type']
                 text = event.get('text', '')
-                if not isinstance(text, str) or len(text) > MAX_TRANSCRIPT:
+                if not isinstance(text, str) or len(text) > (32768 if kind=='devices' else MAX_TRANSCRIPT):
                     raise ValueError()
-                if kind == 'level':
+                if kind == 'devices' and self.warm and self.phase == 'preparing':
+                    options=json.loads(text)
+                    if not isinstance(options,list) or len(options)>64:
+                        raise ValueError()
+                    for item in options:
+                        if (not isinstance(item,dict) or set(item)!={'id','name'} or
+                            not isinstance(item['id'],str) or not 0<len(item['id'])<=512 or
+                            not isinstance(item['name'],str) or not 0<len(item['name'])<=128 or
+                            any(ord(c)<32 for c in item['id']+item['name'])):
+                            raise ValueError()
+                    if len({x['id'] for x in options})!=len(options): raise ValueError()
+                    self.devices.emit(options)
+                elif kind == 'level':
                     if not text.isascii() or not text.isdigit() or len(text) > 3 or int(text) > 100:
                         raise ValueError()
                     self.peak = max(self.peak, int(text))

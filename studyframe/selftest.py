@@ -84,8 +84,8 @@ def main(argv=None):
                 session.cancel()
                 assert observed.get('text') == 'Local speech backend ready.'
                 checks.append('frozen-worker-pipes-and-local-model')
-                # Exercise the real warm-process handshake without resolving or
-                # opening a microphone/playback device or sending Listen.
+                # Exercise the real warm handshake and metadata list without
+                # opening a microphone/playback stream or sending Listen.
                 warm_observed = []
                 session.level.connect(lambda value: warm_observed.append('audio'))
                 session.transcript.connect(lambda text: warm_observed.append('transcript'))

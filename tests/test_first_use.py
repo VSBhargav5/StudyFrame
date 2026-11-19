@@ -15,6 +15,15 @@ class FirstUseTests(unittest.TestCase):
         self.addCleanup(self.window.deleteLater); self.addCleanup(self.window.close)
         self.window.show(); self.app.processEvents()
 
+    def test_key_help_opens_only_official_constant_url_without_sending_content(self):
+        w=self.window
+        w.question.setPlainText('Private synthetic draft')
+        with patch('studyframe.app.QDesktopServices.openUrl') as browser, patch.object(w.provider.manager,'post') as post:
+            w.key_help.click()
+            self.assertEqual(browser.call_args.args[0].toString(),'https://openrouter.ai/settings/keys')
+            post.assert_not_called()
+            self.assertFalse(w.key.text())
+
     def test_setup_is_first_and_explicit_key_action_never_captures_or_sends(self):
         w = self.window
         with patch('studyframe.app.capture_screen') as capture, patch.object(w.provider.manager, 'post') as post:

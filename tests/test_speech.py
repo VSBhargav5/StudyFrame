@@ -11,7 +11,7 @@ from unittest.mock import Mock, MagicMock, patch
 from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer, QProcess
 from PySide6.QtWidgets import QApplication
 from studyframe.speech import SpeechSession, validate_speech_setup
-from studyframe.speech_worker import pcm16, choose_device, recognize, warm_session
+from studyframe.speech_worker import pcm16, choose_device, recognize, warm_session, device_options
 from studyframe.app import StudyWindow
 from studyframe.provider import StudyProvider
 from test_provider import Reply, response
@@ -23,15 +23,28 @@ except ImportError:
 
 
 class WorkerContractTests(unittest.TestCase):
+    def test_named_devices_are_filtered_and_resolved_by_exact_id_without_fallback(self):
+        mic=SimpleNamespace(id='mic-1',name='USB microphone',isloopback=False)
+        loop=SimpleNamespace(id='out-1',name='Headphones',isloopback=True)
+        sc=Mock();sc.all_microphones.return_value=[mic,loop]
+        self.assertEqual(device_options(sc,'microphone'),[{'id':'mic-1','name':'USB microphone'}])
+        self.assertEqual(device_options(sc,'loopback'),[{'id':'out-1','name':'Headphones'}])
+        sc.get_microphone.return_value=loop
+        self.assertIs(choose_device(sc,'loopback','out-1'),loop)
+        for source,identity in [('microphone','out-1'),('loopback','not-out-1'),('bad','out-1')]:
+            with self.assertRaises(ValueError):choose_device(sc,source,identity)
+        sc.default_speaker.assert_not_called();sc.default_microphone.assert_not_called()
+
     def test_warm_model_never_opens_audio_without_listen_and_reuses_recognizer(self):
         sc=Mock();sc.default_microphone.return_value=SimpleNamespace(isloopback=False)
+        sc.all_microphones.return_value=[]
         stop=Mock();stop.command.side_effect=['stop']
         recognizer=Mock();events=[]
         with patch('studyframe.speech_worker.recognize') as record:
             warm_session(sc,'microphone',recognizer,stop,lambda *x:events.append(x))
             record.assert_not_called()
             sc.default_microphone.assert_not_called()
-        self.assertEqual(events[0][0],'ready')
+        self.assertIn(('ready','Local recognizer ready. Click Listen, then wait for Listening now before speaking.'),events)
         stop.command.side_effect=['listen','listen','stop']
         with patch('studyframe.speech_worker.recognize',side_effect=['first whole question','next whole question']) as record:
             warm_session(sc,'microphone',recognizer,stop,lambda *x:events.append(x))
@@ -146,6 +159,19 @@ class RealWorkerTests(unittest.TestCase):
 
 
 class SessionTests(unittest.TestCase):
+    def test_device_metadata_is_bounded_and_exact_selection_goes_only_to_worker(self):
+        self.session.prepare('microphone','model')
+        process=self.session.process
+        devices=Mock();self.session.devices.connect(devices)
+        process.event_line('devices',json.dumps([{'id':'exact-mic','name':'USB microphone'}]))
+        devices.assert_called_once_with([{'id':'exact-mic','name':'USB microphone'}])
+        process.event_line('ready','Ready')
+        self.session.listen('exact-mic')
+        self.assertEqual(json.loads(process.write.call_args.args[0]),{'listen':'exact-mic'})
+        self.session.cancel();self.session.prepare('microphone','model')
+        self.session.process.event_line('devices',json.dumps([{'id':'same','name':'a'},{'id':'same','name':'b'}]))
+        self.assertFalse(self.session.active)
+        self.error.assert_called()
     def test_prepare_never_listens_and_reuses_ready_worker_for_repeated_clips(self):
         with patch('studyframe.speech.validate_speech_setup', return_value='synthetic-model'), \
              patch('studyframe.speech.QProcess', Process):
@@ -253,12 +279,13 @@ class FakeSpeech(QObject):
     transcript = Signal(str)
     failed = Signal(str)
     level = Signal(int)
+    devices = Signal(list)
     active = False
     prepared = False
     phase = 'idle'
     def prepare(self, source, model):
         self.source = source; self.active = False; self.prepared = True; self.phase = 'ready'; self.changed.emit(False)
-    def listen(self):
+    def listen(self, device_id=None):
         self.active = True; self.prepared = False; self.phase = 'listening'; self.changed.emit(True)
     def start(self, source, model): self.active = True; self.source = source; self.changed.emit(True)
     def stop(self): self.active = False; self.prepared = True; self.phase = 'ready'; self.changed.emit(False)

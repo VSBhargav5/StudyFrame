@@ -1,6 +1,6 @@
 # Windows portable release and first use
 
-The local v0.7 portable app includes Python, Qt, local recognition dependencies
+The local v0.9 portable app includes Python, Qt, local recognition dependencies
 and the trusted small US-English model. Open `StudyFrame.exe` inside its extracted
 folder; keep `_internal`, `models`, notices and licenses with it. No terminal,
 Node server or Python installation is required. Source users can still run
@@ -13,14 +13,17 @@ No Start menu/global settings/account setup is modified by the portable package.
 
 ## Use the two workflows
 
-1. Open the capsule. In … choose the AI provider and enter your own session key.
+1. Open the capsule. Click Connect model (or the model badge), choose the AI provider and enter your own session key.
+   Setup is at the top; Get your own key opens only the official provider page.
+   Use this session key closes setup without making a test request.
    OpenRouter is the separately constrained free route; OpenAI is labelled paid.
    Keys are never read from files or saved. Availability/quality requires your
    own trial. No background connection or automatic paid fallback.
 2. **Screen:** expand +, inspect the selected display and write a question, then
    Capture & ask. That click authorizes one fresh selected-screen send. Preview/
    crop remains available for inspection before a separately reviewed send.
-3. **Voice:** Voice → choose playback or microphone → Listen. Watch the signal
+3. **Voice:** Voice → choose playback or microphone → Prepare audio → Ready. Choose a
+   default or named device, click Listen, then speak after Listening now. Watch the signal
    meter; Stop ends the clip. Review/correct the transcript, then Ask text only.
    This sends no audio, screenshot, notes or prior exchange. Silence suggests
    checking the selected output and mute/volume settings. A wrong transcript with
@@ -79,7 +82,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.8.1/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.8.1/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.9.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.9.0/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds
@@ -89,3 +92,27 @@ All model downloads, credential entry and actual user sends remain explicit.
 Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable/runtime-information.html),
 [windowed stdio behavior](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html),
 [Windows rounding limitations](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners).
+
+
+## Optional per-user installer
+
+The Windows CI artifact also includes an unsigned `StudyFrame-0.9.0-windows-x64-setup.exe`.
+It installs for the current user, adds a Start menu entry and an uninstaller, and
+does not auto-run or request admin rights. Close StudyFrame before upgrading or
+uninstalling; a running v0.9+ session blocks these operations rather than being
+terminated. Older portable versions do not implement this installer guard.
+The uninstaller retains app configuration outside the install folder. Model and
+all dependencies inside the install folder are removed with that copy. No signing
+or interrupted-upgrade recovery guarantee is established.
+
+To compile with a separately installed trusted Inno Setup 6 compiler:
+
+```powershell
+.venv/Scripts/python.exe build_installer.py --compiler "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+```
+
+The compiler is not downloaded or installed automatically. Bundle hashes, version,
+file set and links/reparse points are checked before compilation; existing setup
+outputs are refused. `verify_installer.py` is only for a disposable Windows CI
+runner, never a personal install; it tests install, active-session refusal,
+reinstall, installed runtime and retained configuration after uninstall.

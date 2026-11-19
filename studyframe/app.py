@@ -5,11 +5,11 @@ from pathlib import Path
 from datetime import datetime
 from studyframe import __version__
 
-from PySide6.QtCore import Qt, QTimer, QEvent, QRectF
-from PySide6.QtGui import QPixmap, QPainterPath, QRegion
+from PySide6.QtCore import Qt, QTimer, QEvent, QRectF, QUrl
+from PySide6.QtGui import QPixmap, QPainterPath, QRegion, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
-    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QDialog, QInputDialog, QFrame, QSizeGrip, QProgressBar,
+    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QDialog, QInputDialog, QFrame, QSizeGrip, QProgressBar, QMessageBox,
 )
 
 from studyframe.images import ImageError, LoadedImage, load_image, crop_image
@@ -194,6 +194,12 @@ class StudyWindow(QMainWindow):
         self.speech_source.addItem('Microphone · default input device', 'microphone')
         self.speech_source.setAccessibleName('Speech audio source')
         voice.addWidget(self.speech_source)
+        self.speech_device = QComboBox()
+        self.speech_device.setAccessibleName('Exact audio device')
+        self.speech_device.addItem('Windows default device',None)
+        self.speech_device.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.speech_device.setMinimumContentsLength(10)
+        voice.addWidget(self.speech_device)
         self.speech_model = QLineEdit(str(default_model()))
         self.speech_model.setAccessibleName('Local Vosk model folder')
         self.speech_model.setPlaceholderText('Choose an extracted Vosk model folder')
@@ -248,6 +254,9 @@ class StudyWindow(QMainWindow):
         self.connection_info.setTextFormat(Qt.TextFormat.PlainText)
         self.connection_info.setObjectName('muted')
         settings.addWidget(self.connection_info)
+        self.key_help = QPushButton('Get your own key in browser')
+        self.key_help.setToolTip('Opens the selected provider’s official key page. No account linking or test request.')
+        settings.addWidget(self.key_help)
         self.key = QLineEdit()
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         settings.addWidget(self.key)
@@ -392,6 +401,7 @@ class StudyWindow(QMainWindow):
         self.settings_toggle.toggled.connect(self.show_settings)
         self.provider_badge.clicked.connect(lambda: self.settings_toggle.setChecked(True))
         self.connection_done.clicked.connect(self.finish_connection)
+        self.key_help.clicked.connect(self.open_key_help)
         self.review_toggle.toggled.connect(self.show_review)
         self.collapse_button.toggled.connect(self.collapse_overlay)
         self.close_button.clicked.connect(self.close)
@@ -433,6 +443,7 @@ class StudyWindow(QMainWindow):
         self.speech.failed.connect(self.speech_failed)
         self.speech.transcript.connect(self.receive_transcript)
         self.speech.level.connect(self.speech_level.setValue)
+        self.speech.devices.connect(self.receive_devices)
         self.provider_changed()
         if preferences is not None:
             saved = preferences.load()
@@ -477,6 +488,11 @@ class StudyWindow(QMainWindow):
         self.settings_toggle.setChecked(False)
         self.status.setText('Session key entered. No test request was sent. Choose your display and question, then Capture & ask.')
         self.question.setFocus()
+
+    def open_key_help(self):
+        url = ('https://openrouter.ai/settings/keys' if self.provider_choice.currentData()=='openrouter_free'
+               else 'https://platform.openai.com/api-keys')
+        QDesktopServices.openUrl(QUrl(url))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -594,8 +610,16 @@ class StudyWindow(QMainWindow):
 
     def audio_setup_changed(self):
         self.speech.cancel()
+        self.speech_device.clear()
+        self.speech_device.addItem('Windows default device',None)
         self.speech_note.setText('Audio setup changed. Prepare audio before Listen; no recording started.')
         self.update_speech_controls()
+
+    def receive_devices(self, options):
+        self.speech_device.clear()
+        self.speech_device.addItem('Windows default device',None)
+        for device in options:
+            self.speech_device.addItem(device['name'],device['id'])
 
     def prepare_speech(self):
         if self.busy or self.speech.active:
@@ -610,7 +634,7 @@ class StudyWindow(QMainWindow):
             return
         self.speech_text.clear()
         self.speech_level.setValue(0)
-        self.speech.listen()
+        self.speech.listen(self.speech_device.currentData())
 
     def update_speech_controls(self):
         active = self.speech.active
@@ -620,7 +644,7 @@ class StudyWindow(QMainWindow):
         self.speech_record.setText('Stop' if active and not preparing else 'Listen')
         self.speech_record.setEnabled(not self.busy and (active and not preparing or getattr(self.speech, 'prepared', False)))
         self.speech_prepare.setEnabled(not self.busy and not active)
-        for widget in (self.speech_source, self.speech_model, self.speech_browse, self.speech_text):
+        for widget in (self.speech_source, self.speech_device, self.speech_model, self.speech_browse, self.speech_text):
             widget.setEnabled(not self.busy and not active)
         self.ask_speech.setEnabled(bool(self.speech_text.toPlainText().strip()) and not active and not self.busy)
         self.capture_button.setEnabled(not self.busy and not active)
@@ -1120,6 +1144,13 @@ class StudyWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("StudyFrame")
+    from studyframe.launcher import hold_install_mutex
+    try:
+        hold_install_mutex()
+    except OSError:
+        QMessageBox.critical(None, 'StudyFrame could not start',
+                             'The application session could not be reserved safely. Close older StudyFrame instances and retry.')
+        return 1
     window = StudyWindow(start_collapsed=True, preferences=Preferences.default())
     window.show()
     return app.exec()
