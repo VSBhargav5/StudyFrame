@@ -2,7 +2,7 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.9: usable screen-and-voice Windows MVP.** StudyFrame opens
+**v0.9.1: visible capture/request feedback for the Windows MVP.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Prepare audio, choose a device,
 Listen, wait for Listening now, speak, Stop, then review/edit the local
@@ -29,6 +29,10 @@ and a trusted local model. A model-provider key is needed only for AI answers.
 An authorized real default-playback loopback test recognized the public sample’s opening digits after unmuting. Offline regressions also verify the recognition path;
 recognition made errors on later sample digits. Microphone quality, other playback devices, live AI quality and personal usefulness remain unverified. No personal audio was
 recorded or live model call made. RoleWeave remains paused.
+
+Requests now expand/reveal the answer and show progress or a fixed, privacy-safe
+error banner. Preview scrolls to the captured image. HTTP status codes distinguish
+key, rate-limit and compatible-provider failures instead of leaving a blank area.
 
 ## First use
 

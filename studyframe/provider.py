@@ -67,6 +67,7 @@ class StudyProvider(QObject):
         self.manager = manager or QNetworkAccessManager(self)
         self.reply = None
         self.model_used = ""
+        self.provider_id = 'openai'
         self.buffer = bytearray()
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
@@ -87,6 +88,7 @@ class StudyProvider(QObject):
                     or record['max_output_tokens'] != 1500):
                 raise ValueError('The free route requires its fixed model and zero-price policy.')
         self.model_used = ''
+        self.provider_id = provider
         request = QNetworkRequest(QUrl(config['endpoint']))
         request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
                              QNetworkRequest.RedirectPolicy.ManualRedirectPolicy)
@@ -121,12 +123,24 @@ class StudyProvider(QObject):
         data = bytes(self.buffer)
         self.buffer.clear()
         reply.deleteLater()
-        messages = {402: "Account or credit access restricted. No paid fallback was attempted.",
+        messages = {400: "The provider rejected the request format or parameters.",
+                    402: "Account or key credit access restricted. No paid fallback was attempted.",
                     401: "API key rejected. Check the key and project permissions.",
                     403: "This project cannot use the selected model.",
-                    429: "Rate or billing limit reached. Check your API account before retrying."}
+                    404: ("No compatible free endpoint matched the model, image support or privacy/price filters. No paid fallback was attempted."
+                          if self.provider_id=='openrouter_free' else "Selected model or endpoint unavailable."),
+                    429: "Rate limit reached. Wait before retrying; nothing was retried automatically.",
+                    502: "The upstream provider failed. Try again later.",
+                    503: "The provider is unavailable. Try again later.",
+                    504: "The upstream provider timed out. Nothing was retried."}
         if status != 200 or error != QNetworkReply.NetworkError.NoError:
-            self.failed.emit(messages.get(status, "Request failed. Check your connection and API access; nothing was retried."))
+            if status is not None:
+                self.failed.emit(f'HTTP {status}: '+messages.get(status,"Request failed. Check provider access; nothing was retried."))
+            else:
+                network = {QNetworkReply.NetworkError.SslHandshakeFailedError:"Secure connection failed. Check system time and TLS/certificate configuration.",
+                           QNetworkReply.NetworkError.HostNotFoundError:"Provider host could not be found. Check your network/DNS.",
+                           QNetworkReply.NetworkError.ConnectionRefusedError:"Connection refused. Check network or proxy settings."}
+                self.failed.emit(network.get(error,"No HTTP response received. Check your network; nothing was retried."))
             return
         try:
             answer = answer_from_response(data)

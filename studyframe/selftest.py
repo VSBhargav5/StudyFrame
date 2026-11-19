@@ -15,6 +15,7 @@ def main(argv=None):
         return 2
     from PySide6.QtCore import QObject, Signal, QTimer, QEventLoop
     from PySide6.QtWidgets import QApplication
+    from PySide6.QtNetwork import QSslSocket
     from studyframe import __version__
     from studyframe.app import StudyWindow
     from studyframe.preferences import Preferences
@@ -37,6 +38,8 @@ def main(argv=None):
             QTimer.singleShot(0, self, lambda:self.succeeded.emit('Synthetic answer: 0, 1, 2.'))
     window = None
     try:
+        assert QSslSocket.supportsSsl()
+        checks.append('packaged-tls-backend-available')
         with tempfile.TemporaryDirectory(prefix='studyframe-selftest-') as folder:
             store = Preferences(Path(folder)/'setup.json')
             window = StudyWindow(OfflineProvider(), preferences=store, start_collapsed=True)
