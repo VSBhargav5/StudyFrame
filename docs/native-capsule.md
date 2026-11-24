@@ -115,3 +115,15 @@ Reproduce actual native visual checks without opening personal windows:
 
 These checks retain the corner and hidden-baseline exclusion comparisons. The
 visual tradeoff is less desktop show-through in exchange for stable legibility.
+
+
+## v0.13 configurable clear canvas
+
+The default is25% tint, with0Full clear,50Frosted and78Readable presets and a0–90
+slider. Shadow painting now clips outside the rounded surface, so zero tint has
+zero painted alpha at the empty canvas center. This does not remove control/text
+backing or native frost; no screenshot is sampled for blur. Very low tint trades
+readability over some backgrounds for transparency. Readable remains available.
+Tint persists as non-secret version2 setup, with version1 compatibility. Affinity,
+corner clipping, pinning, exclusion readback and the unsupported-OS fallback remain
+separate from appearance. Never call capture exclusion guaranteed invisibility.

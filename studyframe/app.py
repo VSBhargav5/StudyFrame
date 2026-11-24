@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QTimer, QElapsedTimer, QEvent, QRectF, QUrl
 from PySide6.QtGui import QPixmap, QPainterPath, QRegion, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
-    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QDialog, QInputDialog, QFrame, QSizeGrip, QProgressBar, QMessageBox,
+    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget, QLineEdit, QCheckBox, QDialog, QInputDialog, QFrame, QSizeGrip, QProgressBar, QMessageBox,QSlider,
 )
 
 from studyframe.images import ImageError, LoadedImage, load_image, crop_image, resize_image
@@ -77,6 +77,7 @@ class StudyWindow(QMainWindow):
         self.resize(630, 660)
         self.setMinimumSize(470, 110)
         panel = GlassPanel()
+        panel.set_tint(25)
         self.setCentralWidget(panel)
         root = QVBoxLayout(panel)
         self.root_layout = root
@@ -325,6 +326,17 @@ class StudyWindow(QMainWindow):
         self.disclosure.setWordWrap(True)
         self.disclosure.setObjectName('muted')
         settings.addWidget(self.disclosure)
+        self.glass_preset=QComboBox()
+        self.glass_preset.setAccessibleName('Glass appearance preset')
+        for label,value in [('Clear glass',25),('Full clear',0),('Frosted',50),('Readable',78),('Custom tint',-1)]:self.glass_preset.addItem(label,value)
+        settings.addWidget(self.glass_preset)
+        self.glass_label=QLabel('Glass tint25% · lower reveals more background')
+        self.glass_label.setObjectName('muted');settings.addWidget(self.glass_label)
+        self.glass_tint=QSlider(Qt.Orientation.Horizontal)
+        self.glass_tint.setRange(0,90);self.glass_tint.setValue(25)
+        self.glass_tint.setAccessibleName('Glass dark tint percent')
+        self.glass_tint.setToolTip('0 removes the canvas tint; controls retain their own contrast. Readable is available over busy/light backgrounds. Native frost follows Windows transparency settings.')
+        settings.addWidget(self.glass_tint)
         self.pin = QCheckBox('Keep above other windows')
         self.pin.setChecked(True)
         settings.addWidget(self.pin)
@@ -339,7 +351,7 @@ class StudyWindow(QMainWindow):
         self.save_setup_button = QPushButton('Save setup')
         self.save_setup_button.setEnabled(preferences is not None)
         settings.addWidget(self.save_setup_button)
-        self.setup_note = QLabel('Only provider, audio source, model folder and pinning are saved locally. '
+        self.setup_note = QLabel('Only provider, audio source, model folder, pinning and glass tint are saved locally. '
                                 'Keys, questions and transcripts are never saved. Capture exclusion starts on each time.')
         self.setup_note.setObjectName('muted')
         self.setup_note.setWordWrap(True)
@@ -433,25 +445,26 @@ class StudyWindow(QMainWindow):
         root.addLayout(footer)
         self.setStyleSheet("""
             QMainWindow, QWidget { background: transparent; color: #e8edf8; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
-            QLabel#brand { font-size: 17px; font-weight: 650; }
+            QLabel { background: rgba(14,20,34,175); border-radius: 6px; padding: 3px; }
+            QLabel#brand { font-size: 17px; font-weight: 650; background: rgba(14,20,34,170); border-radius: 8px; padding: 4px 6px; }
             QLabel#brandMark { border-radius: 10px; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #b6a0ff,stop:1 #79d6e2); color: #152338; font-size: 17px; font-weight: 800; }
-            QLabel#muted { color: #d0dcf0; font-size: 12px; }
-            QLabel#eyebrow { color: #d0dcf0; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
+            QLabel#muted { color: #d0dcf0; font-size: 12px; background: rgba(14,20,34,175); border-radius: 6px; padding: 3px; }
+            QLabel#eyebrow { color: #d0dcf0; font-size: 11px; font-weight: 600; letter-spacing: 2px; background: rgba(14,20,34,175); border-radius: 6px; padding: 3px; }
             QLabel#requestFeedback { color: #edf2ff; background: rgba(18,27,45,115); border: 1px solid rgba(190,213,246,45); border-radius: 9px; padding: 8px; font-size: 12px; }
             QPushButton#routeBadge { color: #d0dcf0; font-size: 11px; font-weight: 600; background: rgba(140,170,220,18); border: 1px solid rgba(150,190,230,35); border-radius: 9px; padding: 5px 9px; }
             QPushButton#routeBadge[authState="rejected"] { color: #ffb8bd; background: rgba(150,45,70,45); border-color: #a86878; }
             QPushButton#routeBadge[authState="accepted"] { color: #93e5ce; border-color: rgba(115,231,194,70); }
-            QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,125); color: #f0f4fc; placeholder-text-color: #d0dcf0; border: 1px solid rgba(177,199,239,40); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
+            QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,150); color: #f0f4fc; placeholder-text-color: #e2ebfa; border: 1px solid rgba(177,199,239,40); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
             QPlainTextEdit { font-size: 14px; }
             QComboBox { padding: 6px 10px; }
             QComboBox QAbstractItemView { background: #1d263b; color: #e8edf8; selection-background-color: #454d78; }
-            QPushButton { background: rgba(165,184,225,14); border: 1px solid rgba(183,202,240,30); border-radius: 9px; padding: 7px 10px; font-weight: 500; }
+            QPushButton { background: rgba(18,24,40,175); border: 1px solid rgba(183,202,240,30); border-radius: 9px; padding: 7px 10px; font-weight: 500; }
             QPushButton:hover { background: rgba(178,196,238,35); border-color: rgba(199,216,250,85); }
             QPushButton#primary { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #d0bcff,stop:1 #9ddde9); border: 1px solid #d5d4fc; color: #20263f; font-weight: 700; }
             QPushButton#primary:hover { background: #d3d8ff; }
-            QPushButton#ghost { background: transparent; border-color: transparent; color: #c5d1e6; padding: 5px 7px; font-size: 12px; }
+            QPushButton#ghost { background: rgba(18,24,40,170); border-color: transparent; color: #d0dcf0; padding: 5px 7px; font-size: 12px; }
             QPushButton#ghost:hover { background: rgba(167,187,228,22); color: #eef1ff; }
-            QPushButton#windowButton { background: transparent; border: none; padding: 0; font-size: 19px; color: #d0d9ec; }
+            QPushButton#windowButton { background: rgba(18,24,40,170); border: none; padding: 0; font-size: 19px; color: #d0d9ec; }
             QPushButton#windowButton:hover { background: rgba(200,210,240,30); color: white; }
             QPushButton:disabled { color: #66748e; background: rgba(30,40,60,30); border-color: rgba(140,160,200,15); }
             QPlainTextEdit:focus, QLineEdit:focus, QComboBox:focus { border-color: #a6a1dd; }
@@ -514,6 +527,8 @@ class StudyWindow(QMainWindow):
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
         self.save_setup_button.clicked.connect(self.save_setup)
+        self.glass_tint.valueChanged.connect(self.apply_glass_tint)
+        self.glass_preset.activated.connect(self.choose_glass_preset)
         self.voice_button.clicked.connect(self.open_voice)
         self.speech_browse.clicked.connect(self.choose_speech_model)
         self.speech_record.clicked.connect(self.record_speech)
@@ -536,6 +551,7 @@ class StudyWindow(QMainWindow):
                 self.provider_choice.setCurrentIndex(self.provider_choice.findData(saved['provider']))
                 self.speech_source.setCurrentIndex(self.speech_source.findData(saved['source']))
                 self.speech_model.setText(saved['model'])
+                self.glass_tint.setValue(saved['glass_tint'])
                 self.pin.blockSignals(True)
                 self.pin.setChecked(saved['pin'])
                 self.pin.blockSignals(False)
@@ -553,11 +569,23 @@ class StudyWindow(QMainWindow):
             return
         try:
             self.preferences.save(self.provider_choice.currentData(), self.speech_source.currentData(),
-                                  self.speech_model.text(), self.pin.isChecked())
+                                  self.speech_model.text(), self.pin.isChecked(),self.glass_tint.value())
         except (OSError, ValueError):
             self.setup_note.setText('Setup could not be saved. Existing saved setup was preserved; session still works.')
         else:
             self.setup_note.setText('Setup saved locally. Keys, questions, images and transcripts were not saved.')
+
+    def apply_glass_tint(self,value):
+        self.centralWidget().set_tint(value)
+        self.glass_label.setText(f'Glass tint{value}% · lower reveals more background')
+        self.glass_preset.blockSignals(True)
+        index=self.glass_preset.findData(value)
+        self.glass_preset.setCurrentIndex(index if index>=0 else self.glass_preset.findData(-1))
+        self.glass_preset.blockSignals(False)
+
+    def choose_glass_preset(self):
+        value=self.glass_preset.currentData()
+        if value is not None and value>=0:self.glass_tint.setValue(value)
 
     def update_connection(self):
         key = self.key.text()

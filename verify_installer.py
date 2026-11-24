@@ -19,7 +19,10 @@ def verify(installer, workspace):
     executable=destination/'StudyFrame.exe'
     before=hashlib.sha256(executable.read_bytes()).hexdigest()
     report=workspace/'installed-runtime.json'
-    subprocess.run([str(executable),'--self-test','--output',str(report)],check=True,timeout=90)
+    runtime=[str(executable),'--self-test','--output',str(report)]
+    bundled=destination/'models/vosk-model-small-en-us-0.15'
+    if bundled.is_dir():runtime+=['--model',str(bundled)]
+    subprocess.run(runtime,check=True,timeout=90)
     assert json.loads(report.read_text())['ok']
     # A genuine running-app mutex must block replacement, rather than kill it.
     kernel=ctypes.WinDLL('kernel32',use_last_error=True,winmode=0x800)

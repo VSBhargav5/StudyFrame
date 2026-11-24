@@ -33,6 +33,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--background', choices=('stripes', 'light', 'dark'), default='stripes')
+    parser.add_argument('--tint',type=int,choices=range(91),default=25)
     args = parser.parse_args()
     if sys.platform != 'win32': parser.error('This check requires native Windows Qt.')
     app = QApplication([])
@@ -48,6 +49,7 @@ def main():
     backdrop.move(available.center() - backdrop.rect().center())
     backdrop.show()
     window = StudyWindow(start_collapsed=True)
+    window.glass_tint.setValue(args.tint)
     window.move(backdrop.geometry().center() - window.rect().center())
     window.question.setPlainText('Why does range(3) stop before 3?')
     window.answer.setPlainText('Synthetic answer — no model called.\n\nrange(3) produces 0, 1, 2. The stop is exclusive.\n\nTry list(range(3)) to verify this prediction.')
@@ -110,7 +112,7 @@ def main():
         points = [(x if left else shown.width()-1-x, y if top else shown.height()-1-y)
                   for x in range(3) for y in range(3) for left in (True, False) for top in (True, False)]
         unchanged = sum(shown.pixelColor(x,y) == hidden.pixelColor(x,y) for x,y in points)
-        report = {'windows_build': sys.getwindowsversion().build, 'background': args.background, 'observations': observations,
+        report = {'windows_build': sys.getwindowsversion().build, 'background': args.background,'tint':args.tint, 'observations': observations,
                   'outside_corner_pixels_unchanged': unchanged, 'outside_corner_pixels_checked': len(points),
                   'excluded_matches_hidden_fixture': hidden == captures['glass-baseline']}
         (args.output / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')

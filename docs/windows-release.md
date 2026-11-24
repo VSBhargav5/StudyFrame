@@ -38,7 +38,7 @@ Capture exclusion starts enabled every session; remember to test your own record
 Unreadable/incompatible setup uses safe defaults with a visible settings message.
 
 The included model avoids folder selection for a fresh local portable launch.
-CI artifacts deliberately omit large model weights; follow [speech setup](speech.md)
+CI artifacts include small US/Indian English weights; follow [speech setup](speech.md)
 to select an extracted trusted Vosk model once. Moving an externally chosen model
 can require selecting its folder again. Model/pack resources are unencrypted.
 
@@ -82,11 +82,11 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.12.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.12.0/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.13.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.13.0/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds
-the same runtime without model weights and checks worker dispatch/failure behavior.
+the same runtime with bundled speech weights and verifies actual local model readiness.
 All model downloads, credential entry and actual user sends remain explicit.
 
 Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable/runtime-information.html),
@@ -96,7 +96,7 @@ Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable
 
 ## Optional per-user installer
 
-The Windows CI artifact also includes an unsigned `StudyFrame-0.12.0-windows-x64-setup.exe`.
+The Windows CI artifact also includes an unsigned `StudyFrame-0.13.0-windows-x64-setup.exe`.
 It installs for the current user, adds a Start menu entry and an uninstaller, and
 does not auto-run or request admin rights. Close StudyFrame before upgrading or
 uninstalling; a running v0.9+ session blocks these operations rather than being
@@ -131,7 +131,7 @@ paid fallback was relaxed. Raw provider bodies are never echoed.
 For an explicit public-metadata transport check (no key/content/model request):
 
 ```powershell
-out/portable-v0.12.0/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
+out/portable-v0.13.0/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
 ```
 
 This contacts only OpenRouter's public models endpoint and checks HTTPS response
@@ -209,7 +209,7 @@ Full size retains original resolution, and original pixels can be restored/cropp
 Existing loaded images are not silently resized. Fewer pixels may reduce work,
 but vision/queue/model choice can still take longer than text. No latency promise.
 Optional build: add --indian-model models/vosk-model-small-en-in-0.4 alongside
---model models/vosk-model-small-en-us-0.15 to bundle both presets. CI omits weights.
+--model models/vosk-model-small-en-us-0.15 to bundle both presets. CI now bundles both small models after verified build-time download.
 
 
 ## Local OCR packaging and limits
@@ -228,3 +228,27 @@ Portable/installer now include OCR dependencies/weights, making downloads larger
 See third_party/ocr for source/model attribution; dynamically bundled dependency
 licenses accompany artifacts. Frozen self-test runs actual OCR on generated text
 without capture/upload. No user-voice/OCR accuracy or speedup is established.
+
+
+## Clear appearance and ready speech packages
+
+DefaultClear glass uses25% canvas tint. Full clear0 removes the painted interior
+shade; controls/text retain local backing and native host-backdrop frost is still
+subject to Windows support/settings. Frosted50/Readable78 and a0–90slider provide
+an explicit tradeoff. Version2 non-secret preferences save tint; version1 files
+load with existing choices and default25. Capture exclusion/keys/consent/content
+are not saved. At0 readability depends on the background; use Readable if needed.
+
+Fresh build-time model setup, never against an existing folder:
+
+```powershell
+python fetch_speech_models.py --destination out/new-speech-assets
+python build_windows.py --model out/new-speech-assets/vosk-model-small-en-us-0.15 --indian-model out/new-speech-assets/vosk-model-small-en-in-0.4
+```
+
+Two fixed AlphaCephei HTTPS archives are pinned by SHA256, capped64MiB each and
+200MiB extracted per archive. Paths/duplicates/symlinks are rejected before writing;
+both models stage before the new destination is published. Existing paths are
+refused, failed stages retained. No secrets, live model requests or recording.
+CI uses these assets in both portable/installer; installed runtime checks model
+Ready. Bundled models remove folder setup, not personal accent/device acceptance.
