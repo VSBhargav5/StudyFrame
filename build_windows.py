@@ -51,6 +51,7 @@ def main():
     subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--windowed','--onedir',
                     '--name','StudyFrame','--distpath',str(stage/'dist'),'--workpath',str(stage/'work'),
                     '--specpath',str(stage),'--paths',str(repo),'--collect-all','soundcard','--collect-all','vosk',
+                    '--collect-all','rapidocr','--collect-all','onnxruntime',
                     str(repo/'desktop.py')],cwd=repo,env=build_environment(),check=True)
     bundle = stage/'dist/StudyFrame'
     for name in ('LICENSE','README.md'):
@@ -84,7 +85,7 @@ def main():
         shutil.copytree(args.indian_model,bundle/'models/vosk-model-small-en-in-0.4')
     (bundle/'THIRD_PARTY_NOTICES.txt').write_text(
         'StudyFrame uses unchanged dynamically linked Qt/PySide (LGPL/GPL/commercial options), '
-        'Python, NumPy, Vosk, SoundCard and their dependencies. See licenses/ for installed license/notice texts.\n'
+        'Python, NumPy, Vosk, SoundCard, RapidOCR/PaddleOCR models, ONNX Runtime, OpenCV, Pillow and their dependencies. See licenses/ and third_party/ocr/ for license/notice texts.\n'
         'Qt/PySide source and replacement information: https://download.qt.io/official_releases/QtForPython/\n'
         'This portable folder permits replacement of its dynamic Qt libraries. No changes to Qt sources are included.\n'
         'Optional models: Alpha Cephei small US English0.15 and Indian English0.4, Apache-2.0 as listed at https://alphacephei.com/vosk/models .\n'

@@ -1,0 +1,9 @@
+rapidocr==3.10.0
+onnxruntime==1.23.2
+opencv-python-headless==5.1.0.95
+Pillow==13.0.0
+numpy==2.2.6
+pyclipper==1.4.0
+Shapely==2.2.0
+PyYAML==6.0.4
+omegaconf==2.4.0

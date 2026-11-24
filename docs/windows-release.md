@@ -82,7 +82,7 @@ the new folder/ZIP. Failed/previous stages stay intact; do not build into a runn
 app's folder. Stages consume disk. No recursive cleanup or private-data sweep occurs.
 
 ```powershell
-out/portable-v0.11.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.11.0/StudyFrame/models/vosk-model-small-en-us-0.15
+out/portable-v0.12.0/StudyFrame/StudyFrame.exe --self-test --output out/new-runtime-check.json --model out/portable-v0.12.0/StudyFrame/models/vosk-model-small-en-us-0.15
 ```
 
 Use a new report path. The self-test never reads your normal setup or key. CI builds
@@ -96,7 +96,7 @@ Primary contracts: [PyInstaller runtime paths](https://pyinstaller.org/en/stable
 
 ## Optional per-user installer
 
-The Windows CI artifact also includes an unsigned `StudyFrame-0.11.0-windows-x64-setup.exe`.
+The Windows CI artifact also includes an unsigned `StudyFrame-0.12.0-windows-x64-setup.exe`.
 It installs for the current user, adds a Start menu entry and an uninstaller, and
 does not auto-run or request admin rights. Close StudyFrame before upgrading or
 uninstalling; a running v0.9+ session blocks these operations rather than being
@@ -131,7 +131,7 @@ paid fallback was relaxed. Raw provider bodies are never echoed.
 For an explicit public-metadata transport check (no key/content/model request):
 
 ```powershell
-out/portable-v0.11.0/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
+out/portable-v0.12.0/StudyFrame/StudyFrame.exe --connection-check --output out/new-connection.json
 ```
 
 This contacts only OpenRouter's public models endpoint and checks HTTPS response
@@ -210,3 +210,21 @@ Existing loaded images are not silently resized. Fewer pixels may reduce work,
 but vision/queue/model choice can still take longer than text. No latency promise.
 Optional build: add --indian-model models/vosk-model-small-en-in-0.4 alongside
 --model models/vosk-model-small-en-us-0.15 to bundle both presets. CI omits weights.
+
+
+## Local OCR packaging and limits
+
+RapidOCR3.10.0/ONNX Runtime1.23.2 CPU runs in a disposable process, separately from
+the Qt GUI. Input is one PNG/JPEG byte snapshot at most8MiB/16million pixels; IPC
+has a128KiB output cap and30second deadline. Cancel/end/exit kill the owned worker
+and late replies are ignored. Source hash,20,000-character bound and explicit
+review consent gate the text-only send. No OCR input/output file is created.
+Models/config ship with the pinned package; exact hashes and explicit paths stop
+missing/changed assets before inference rather than downloading. Real synthetic
+backend tests forbid network connections. Upright text is the supported target;
+OCR does not preserve code syntax/indentation or understand diagrams reliably.
+
+Portable/installer now include OCR dependencies/weights, making downloads larger.
+See third_party/ocr for source/model attribution; dynamically bundled dependency
+licenses accompany artifacts. Frozen self-test runs actual OCR on generated text
+without capture/upload. No user-voice/OCR accuracy or speedup is established.

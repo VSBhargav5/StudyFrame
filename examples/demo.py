@@ -16,6 +16,7 @@ def main():
     views.add_argument('--overlay-answer',action='store_true',help='Show a labelled offline example answer in the glass overlay')
     views.add_argument('--collapsed',action='store_true',help='Show the compact glass bar without capturing or sending')
     views.add_argument('--request-error',action='store_true',help='Show a synthetic request failure without making a network request')
+    views.add_argument('--ocr-review',action='store_true',help='Show a synthetic extracted-text review, no OCR or provider call')
     args = parser.parse_args()
     if args.snapshot:
         os.environ.setdefault("QT_QPA_PLATFORM", "windows" if sys.platform == "win32" else "offscreen")
@@ -55,6 +56,10 @@ def main():
         if args.crop:
             window.apply_crop(QRect(20, 100, 650, 110))
         window.prepare()
+        if args.ocr_review:
+            window.ocr_snapshot=window.attachment.sha256;window.ocr_pending=True;window.set_busy(True)
+            window.receive_ocr('for i in range(3):\n    print(i)\n\n# Synthetic review fixture, not an OCR result')
+            app.processEvents();window.scroll.ensureWidgetVisible(window.ocr_text)
         if args.overlay_answer:
             window.sent_question = window.question.toPlainText()
             window.provider.model_used = 'offline-demo'

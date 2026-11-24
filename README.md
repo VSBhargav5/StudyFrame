@@ -2,7 +2,7 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.11: session keys, balanced captures and offline accent options.** StudyFrame opens
+**v0.12: local screen-to-text review and clear authentication states.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Prepare audio, choose a device,
 Listen, wait for Listening now, speak, Stop, then review/edit the local
@@ -63,6 +63,19 @@ promise text-like vision latency; the user's10–20s image/1–2s text timings a
 report, not a controlled benchmark. Voice includes installed US/Indian-English
 model presets; local development portable bundles both. The Indian model is an
 alternative to compare, not a recognition-quality fix. [Speech limitations](docs/speech.md).
+
+**Read screen text** captures the selected display locally and runs CPU OCR without
+a key or upload. Correct the extracted text, review the source preview, check the
+review checkbox, then **Ask reviewed text only**. That action includes no image,
+audio or old notes. Cropping/replacing an image invalidates its extracted text;
+edits revoke consent. The bundled OCR models are verified before use, with no
+runtime model download. Symbols, indentation, order and diagrams can be misread.
+The separate Capture & ask route still sends pixels explicitly. OCR may avoid
+vision processing but does not guarantee lower total latency.
+
+Connection badges now distinguish Key entered, Auth rejected, Metadata accepted
+and Answer received. A401 does not erase your key or trigger retries; its cause
+remains a user/account evidence gate. [MVP paths and acceptance](docs/mvp.md).
 
 ## First use
 
@@ -142,7 +155,7 @@ include pinned Qt/Shiboken and Windows-only compositor bindings. Optional packag
 
 No background uploads, persistent history or code execution. Capture & ask sends
 one fresh frame only when you deliberately invoke it; preview-only captures do not.
-There is no continuous capture, audio capture, local OCR, telemetry, or model SDK.
+There is no continuous capture, background audio recording, telemetry or automatic provider upload. Local OCR and speech use explicitly selected snapshots/clips.
 The file picker and OS clipboard are operating-system facilities; OS/cloud
 clipboard history is outside StudyFrame's control.
 

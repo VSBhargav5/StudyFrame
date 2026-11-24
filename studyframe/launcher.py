@@ -50,6 +50,11 @@ def worker_pipes():
 
 
 def main():
+    if sys.argv[1:2] == ['--ocr-worker']:
+        try:worker_pipes()
+        except OSError:return 2
+        from studyframe.ocr_worker import main as ocr_main
+        return ocr_main()
     if sys.argv[1:2] == ['--connection-check']:
         from studyframe.connectivity import main as check_main
         return check_main(sys.argv[2:])
