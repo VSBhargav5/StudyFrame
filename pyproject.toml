@@ -4,11 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "studyframe"
-version = "0.11.0"
+version = "0.12.0"
 description = "A personal Python desktop workspace for studying code and screenshots"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "rapidocr==3.10.0",
+    "onnxruntime==1.23.2",
+    "opencv-python-headless==5.1.0.95",
+    "Pillow==13.0.0",
+    "numpy==2.2.6",
     "PySide6-Essentials==6.11.3",
     "winrt-runtime==4.2.0; sys_platform == 'win32'",
     "winrt-Windows.UI.Composition==4!10.0.28000.2957; sys_platform == 'win32'",

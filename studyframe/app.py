@@ -21,6 +21,7 @@ from studyframe.glass import GlassPanel, DragBar
 from studyframe.windows_effects import apply_window_effects, WindowEffects, FALLBACK_MATERIAL
 from studyframe.backdrop import create_backdrop
 from studyframe.speech import SpeechSession
+from studyframe.ocr import OcrSession,MAX_OCR_TEXT
 from studyframe.preferences import Preferences
 from studyframe.launcher import default_model
 
@@ -32,10 +33,15 @@ class ProviderPicker(QComboBox):
 
 
 class StudyWindow(QMainWindow):
-    def __init__(self, provider=None, *, start_collapsed=False, speech=None, preferences=None):
+    def __init__(self, provider=None, *, start_collapsed=False, speech=None, preferences=None, ocr=None):
         super().__init__()
         self.provider = provider or StudyProvider(self)
         self.speech = speech or SpeechSession(self)
+        self.ocr = ocr or OcrSession(self)
+        self.ocr_snapshot=''
+        self.ocr_pending=False
+        self.ocr_after_capture=False
+        self.credential_state=''
         self.preferences = preferences
         self.busy = False
         self.pending_screen = None
@@ -174,6 +180,10 @@ class StudyWindow(QMainWindow):
         self.new_topic_button.setToolTip('Start a new question')
         self.new_topic_button.setObjectName('ghost')
         style_row.addWidget(self.mode)
+        self.text_capture_button=QPushButton('Read screen text')
+        self.text_capture_button.setObjectName('ghost')
+        self.text_capture_button.setToolTip('Capture selected display locally, extract text offline, then review. Nothing is uploaded until Ask reviewed text only.')
+        style_row.addWidget(self.text_capture_button)
         self.capture_size = QComboBox()
         self.capture_size.addItem('Image: balanced',1280)
         self.capture_size.addItem('Image: full size',None)
@@ -368,6 +378,20 @@ class StudyWindow(QMainWindow):
         self.image_info.setWordWrap(True)
         self.image_info.setObjectName('muted')
         review.addWidget(self.image_info)
+        self.extract_button=QPushButton('Extract text locally · no upload')
+        review.addWidget(self.extract_button)
+        self.ocr_note=QLabel('For code/text screenshots: extract, correct punctuation and indentation, then explicitly send text only. Diagrams need the image route.')
+        self.ocr_note.setWordWrap(True);self.ocr_note.setObjectName('muted')
+        review.addWidget(self.ocr_note)
+        self.ocr_text=QPlainTextEdit()
+        self.ocr_text.setAccessibleName('Reviewed local image text')
+        self.ocr_text.setPlaceholderText('Local OCR text appears here for review. Nothing is sent automatically.')
+        self.ocr_text.setFixedHeight(110)
+        review.addWidget(self.ocr_text)
+        self.ocr_consent=QCheckBox('I reviewed this extracted text for sending')
+        review.addWidget(self.ocr_consent)
+        self.ask_ocr=QPushButton('Ask reviewed text only · no image')
+        review.addWidget(self.ask_ocr)
         self.context = QPlainTextEdit()
         self.context.setAccessibleName('Notes or code')
         self.context.setPlaceholderText('Optional notes or code…')
@@ -414,7 +438,9 @@ class StudyWindow(QMainWindow):
             QLabel#muted { color: #d0dcf0; font-size: 12px; }
             QLabel#eyebrow { color: #d0dcf0; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
             QLabel#requestFeedback { color: #edf2ff; background: rgba(18,27,45,115); border: 1px solid rgba(190,213,246,45); border-radius: 9px; padding: 8px; font-size: 12px; }
-            QPushButton#routeBadge { color: #93e5ce; font-size: 11px; font-weight: 600; background: rgba(90,220,180,18); border: 1px solid rgba(115,231,194,35); border-radius: 9px; padding: 5px 9px; }
+            QPushButton#routeBadge { color: #d0dcf0; font-size: 11px; font-weight: 600; background: rgba(140,170,220,18); border: 1px solid rgba(150,190,230,35); border-radius: 9px; padding: 5px 9px; }
+            QPushButton#routeBadge[authState="rejected"] { color: #ffb8bd; background: rgba(150,45,70,45); border-color: #a86878; }
+            QPushButton#routeBadge[authState="accepted"] { color: #93e5ce; border-color: rgba(115,231,194,70); }
             QPlainTextEdit, QLineEdit, QComboBox { background: rgba(12,18,31,125); color: #f0f4fc; placeholder-text-color: #d0dcf0; border: 1px solid rgba(177,199,239,40); border-radius: 11px; padding: 9px; selection-background-color: #625a94; }
             QPlainTextEdit { font-size: 14px; }
             QComboBox { padding: 6px 10px; }
@@ -477,6 +503,13 @@ class StudyWindow(QMainWindow):
         self.provider.succeeded.connect(self.receive_answer)
         self.provider.failed.connect(self.receive_error)
         self.provider.quota_received.connect(self.receive_quota)
+        self.extract_button.clicked.connect(self.extract_image_text)
+        self.text_capture_button.clicked.connect(self.capture_for_text)
+        self.ocr_text.textChanged.connect(self.ocr_edited)
+        self.ocr_consent.toggled.connect(self.update_send)
+        self.ask_ocr.clicked.connect(self.ask_image_text)
+        self.ocr.succeeded.connect(self.receive_ocr)
+        self.ocr.failed.connect(self.ocr_failed)
         if hasattr(self.provider,'partial'):self.provider.partial.connect(self.receive_partial)
         self.followup_button.clicked.connect(self.start_followup)
         self.new_topic_button.clicked.connect(self.new_topic)
@@ -532,14 +565,19 @@ class StudyWindow(QMainWindow):
         self.connection_done.setEnabled(valid and not self.busy)
         self.quota_button.setEnabled(valid and not self.busy and not self.speech.active and self.provider_choice.currentData()=='openrouter_free')
         self.capture_button.setText('Capture && ask' if valid else 'Connect model')
-        self.provider_badge.setText(('Key entered' if valid else 'Connect') +
+        label='Auth rejected' if valid and self.credential_state=='rejected' else 'Metadata accepted' if valid and self.credential_state=='metadata' else 'Answer received' if valid and self.credential_state=='answer' else 'Key entered' if valid else 'Connect'
+        self.provider_badge.setText(label +
                                     (' · free' if self.provider_choice.currentData() == 'openrouter_free' else ' · paid'))
+        state='rejected' if self.credential_state=='rejected' else 'accepted' if self.credential_state in ('metadata','answer') else 'unchecked'
+        if self.provider_badge.property('authState')!=state:
+            self.provider_badge.setProperty('authState',state)
+            self.provider_badge.style().unpolish(self.provider_badge);self.provider_badge.style().polish(self.provider_badge)
 
     def finish_connection(self):
         if not self.connection_done.isEnabled():
             return
         self.settings_toggle.setChecked(False)
-        self.show_feedback('Session key ready. No test request sent. Capture a screen or open Voice to ask text only.')
+        self.show_feedback('Session key retained in memory. No test request sent; this button does not check authentication.')
         self.question.setFocus()
 
     def open_key_help(self):
@@ -559,6 +597,7 @@ class StudyWindow(QMainWindow):
     def receive_quota(self, text):
         if not self.busy:return
         self.set_busy(False)
+        self.credential_state='metadata';self.update_connection()
         self.show_feedback(text)
 
     def showEvent(self, event):
@@ -725,6 +764,7 @@ class StudyWindow(QMainWindow):
             widget.setEnabled(not self.busy and not active)
         self.ask_speech.setEnabled(bool(self.speech_text.toPlainText().strip()) and not active and not self.busy)
         self.capture_button.setEnabled(not self.busy and not active)
+        self.text_capture_button.setEnabled(not self.busy and not active)
         self.prepare_button.setEnabled(not self.busy and not active)
         self.update_send()
         self.update_connection()
@@ -789,6 +829,7 @@ class StudyWindow(QMainWindow):
         self.update_receipt()
 
     def key_changed(self):
+        self.credential_state=''
         if self.busy:self.cancel_request()
         self.consent.setChecked(False)
         self.update_send()
@@ -891,6 +932,7 @@ class StudyWindow(QMainWindow):
         self.begin_capture(screen,(text,question,self.provider_choice.currentData(),key))
 
     def begin_capture(self, screen, direct=None):
+        self.ocr_after_capture=False
         self.direct_request = direct
         self.pending_screen = screen
         self.set_busy(True)
@@ -899,6 +941,7 @@ class StudyWindow(QMainWindow):
         self.capture_timer.start(350)
 
     def provider_changed(self):
+        self.credential_state=''
         selected=self.provider_choice.currentData()
         if self.key_provider is not None:self.session_keys[self.key_provider]=self.key.text()
         self.key_provider=selected
@@ -943,6 +986,8 @@ class StudyWindow(QMainWindow):
         screen = self.pending_screen
         if screen is None:return
         direct = self.direct_request
+        extract_local=self.ocr_after_capture
+        self.ocr_after_capture=False
         self.pending_screen = None
         self.direct_request = None
         self.capture_timer.stop()
@@ -970,6 +1015,7 @@ class StudyWindow(QMainWindow):
         if direct is None:
             if not self.question.toPlainText().strip():self.question.setPlainText('Explain what is on this screen.')
             self.review_toggle.setChecked(True)
+            if extract_local:self.extract_image_text()
             self.status.setText('Captured locally. Crop or prepare a reviewed request; nothing sent.')
             return
         text,question,provider,key = direct
@@ -981,6 +1027,9 @@ class StudyWindow(QMainWindow):
         self.send_prepared(payload(text,selected,provider),question)
 
     def material_changed(self):
+        self.ocr_snapshot=''
+        self.ocr_text.clear()
+        self.ocr_consent.setChecked(False)
         self.followup_context = None
         self.followup_note.setText("New question. No previous exchange will be sent.")
         self.invalidate()
@@ -1010,6 +1059,56 @@ class StudyWindow(QMainWindow):
     def update_send(self):
         self.send_button.setEnabled(bool(self.preview.toPlainText()) and bool(self.key.text())
                                     and self.consent.isChecked() and not self.busy and not self.speech.active)
+        self.extract_button.setEnabled(self.attachment is not None and not self.busy and not self.speech.active)
+        valid_text=0<len(self.ocr_text.toPlainText().strip())<=MAX_OCR_TEXT
+        current=self.attachment is not None and self.attachment.sha256==self.ocr_snapshot
+        self.ask_ocr.setEnabled(current and valid_text and self.ocr_consent.isChecked() and bool(self.key.text()) and not self.busy and not self.speech.active)
+
+    def ocr_edited(self):
+        self.ocr_consent.setChecked(False)
+        self.update_send()
+
+    def capture_for_text(self):
+        if self.busy or self.speech.active:return
+        screen=self.screen_choice.currentData()
+        if screen is None or screen not in QApplication.screens():
+            self.show_feedback('Choose an available display for local text capture. Nothing sent.',failed=True);return
+        self.begin_capture(screen)
+        self.ocr_after_capture=True
+
+    def extract_image_text(self):
+        if not self.extract_button.isEnabled():return
+        self.ocr_text.clear();self.ocr_snapshot=self.attachment.sha256
+        self.ocr_pending=True
+        self.set_busy(True)
+        self.show_feedback('Extracting text locally · no upload. Cancel above. Review OCR errors before sending.')
+        try:self.ocr.start(self.attachment)
+        except ValueError as exc:self.ocr_failed(str(exc))
+
+    def receive_ocr(self,text):
+        if not self.busy or not self.ocr_pending:return
+        self.ocr_pending=False
+        self.set_busy(False)
+        if self.attachment is None or self.attachment.sha256!=self.ocr_snapshot:
+            self.ocr_failed('The image changed. Extract again; nothing sent.');return
+        self.ocr_text.setPlainText(text)
+        self.review_toggle.setChecked(True)
+        self.scroll.ensureWidgetVisible(self.ocr_text)
+        self.show_feedback('Text extracted locally. Review/correct it, check consent, then Ask reviewed text only. Nothing sent.')
+
+    def ocr_failed(self,message):
+        self.ocr_pending=False
+        self.set_busy(False)
+        self.ocr_snapshot=''
+        self.show_feedback(message,failed=True)
+
+    def ask_image_text(self):
+        if not self.ask_ocr.isEnabled():return
+        question=self.question.toPlainText().strip() or 'Explain this extracted text briefly.'
+        try:prepared=prepare_request(question,self.ocr_text.toPlainText(),self.mode.currentData())
+        except RequestError as exc:self.show_feedback(str(exc),failed=True);return
+        self.ocr_consent.setChecked(False)
+        self.send_prepared(payload(prepared,None,self.provider_choice.currentData()),question)
 
     def set_busy(self, busy):
         self.busy = busy
@@ -1030,6 +1129,8 @@ class StudyWindow(QMainWindow):
         self.followup_button.setEnabled(not busy and self.last_exchange is not None)
         self.update_send()
         self.update_speech_controls()
+        self.ocr_text.setEnabled(not busy)
+        self.ocr_consent.setEnabled(not busy)
 
         self.update_connection()
 
@@ -1079,6 +1180,7 @@ class StudyWindow(QMainWindow):
         self.set_busy(False)
         self.consent.setChecked(False)
         self.answer.setPlainText(text)
+        self.credential_state='answer';self.update_connection()
         self.partial_answer=False
         self.reveal_answer()
         self.last_exchange = (self.sent_question, text)
@@ -1096,12 +1198,21 @@ class StudyWindow(QMainWindow):
         if not self.busy:
             return
         self.set_busy(False)
+        if message.startswith('HTTP 401:'):
+            self.credential_state='rejected';self.update_connection()
+            message=('HTTP 401: Authentication rejected. Check free usage in this same app to distinguish credential access from a model-request failure. Nothing retried.'
+                     if self.provider_choice.currentData()=='openrouter_free' else
+                     'HTTP 401: Authentication rejected. Check the selected OpenAI project and its session key. Nothing retried.')
         self.consent.setChecked(False)
         if getattr(self.provider,'mode','answer')=='answer':self.reveal_answer()
         if self.partial_answer and getattr(self.provider,'mode','answer')=='answer':message='Partial answer — not completed. '+message
         self.show_feedback(message,failed=True)
 
     def cancel_request(self):
+        self.ocr_after_capture=False
+        self.ocr_pending=False
+        local_ocr=self.ocr.active
+        self.ocr.cancel()
         checking_usage=self.busy and getattr(self.provider,'mode','answer')=='quota'
         self.direct_request = None
         if self.pending_screen is not None:
@@ -1112,11 +1223,14 @@ class StudyWindow(QMainWindow):
         self.provider.cancel()
         self.set_busy(False)
         self.consent.setChecked(False)
-        self.show_feedback('Usage check cancelled. No model request was made.' if checking_usage else
+        self.show_feedback('Local OCR cancelled. No image or text sent.' if local_ocr else 'Usage check cancelled. No model request was made.' if checking_usage else
                            ('Partial answer — cancelled locally. ' if self.partial_answer else 'Cancelled locally. ')+
                            'A provider may still process what was already sent; cancellation does not reverse charges.')
 
     def closeEvent(self, event):
+        self.ocr_after_capture=False
+        self.ocr_pending=False
+        self.ocr.cancel()
         self.save_setup()
         self.speech.cancel()
         self.effects_timer.stop()
@@ -1136,6 +1250,7 @@ class StudyWindow(QMainWindow):
         if self.busy:
             self.cancel_request()
         self.consent.setChecked(False)
+        self.ocr_consent.setChecked(False)
         self.answer.clear()
         self.request_failed = False
         self.feedback.clear()

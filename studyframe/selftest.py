@@ -69,6 +69,25 @@ def main(argv=None):
             assert '48 of 50' in window.feedback.text()
             assert window.answer.toPlainText()=='Synthetic answer: 0, 1, 2.'
             checks.append('quota-button-without-model-inference')
+            # Actual bundled OCR in the disposable worker, synthetic pixels only.
+            from PySide6.QtGui import QImage,QPainter,QFont,QColor
+            from PySide6.QtCore import QBuffer,QByteArray,QIODevice
+            from studyframe.images import LoadedImage
+            import hashlib
+            sample=QImage(850,160,QImage.Format.Format_RGB32);sample.fill(0xffffffff)
+            painter=QPainter(sample);painter.setPen(QColor('black'))
+            painter.setFont(QFont('Consolas',28));painter.drawText(25,80,'StudyFrame 12345');painter.end()
+            encoded=QByteArray();out=QBuffer(encoded);out.open(QIODevice.OpenModeFlag.WriteOnly)
+            assert sample.save(out,'PNG');pixels=bytes(encoded)
+            window.attachment=LoadedImage(pixels,sample,hashlib.sha256(pixels).hexdigest(),850,160,'png')
+            window.original_attachment=window.attachment;window.update_send()
+            ocr_loop=QEventLoop();ocr_timer=QTimer();ocr_timer.setSingleShot(True)
+            ocr_timer.timeout.connect(ocr_loop.quit)
+            window.ocr.succeeded.connect(ocr_loop.quit);window.ocr.failed.connect(ocr_loop.quit)
+            window.extract_image_text();ocr_timer.start(35000);ocr_loop.exec();ocr_timer.stop()
+            recognized=''.join(c for c in window.ocr_text.toPlainText().upper() if c.isalnum())
+            assert 'STUDYFRAME12345' in recognized and not window.ocr_consent.isChecked()
+            checks.append('local-ocr-worker-reviewed-not-sent')
             window.save_setup()
             saved = store.path.read_text(encoding='utf-8')
             assert 'selftest-key' not in saved and 'range(3)' not in saved

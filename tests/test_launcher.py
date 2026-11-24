@@ -7,6 +7,13 @@ from studyframe.launcher import default_model, main
 
 
 class LauncherTests(unittest.TestCase):
+    def test_ocr_worker_dispatch_uses_private_pipes_without_gui_or_speech(self):
+        with patch.object(sys,'argv',['StudyFrame.exe','--ocr-worker']), \
+             patch('studyframe.launcher.worker_pipes') as pipes, \
+             patch('studyframe.ocr_worker.main',return_value=0) as ocr, \
+             patch('studyframe.app.main') as gui,patch('studyframe.speech_worker.main') as speech:
+            self.assertEqual(main(),0)
+        pipes.assert_called_once();ocr.assert_called_once();gui.assert_not_called();speech.assert_not_called()
     def test_metadata_check_dispatch_does_not_open_gui_or_speech(self):
         with patch.object(sys,'argv',['StudyFrame.exe','--connection-check','--output','new.json']), \
              patch('studyframe.connectivity.main',return_value=0) as check, \
