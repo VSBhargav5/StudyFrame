@@ -2,14 +2,17 @@
 
 A personal Windows screen assistant, built in original Python source.
 
-**v0.12: local screen-to-text review and clear authentication states.** StudyFrame opens
+**v0.13: clear glass, saved tint and complete offline-model packages.** StudyFrame opens
 as a small desktop capsule. **+** expands the question/answer panel; **Voice**
 opens microphone/computer-playback controls. Prepare audio, choose a device,
 Listen, wait for Listening now, speak, Stop, then review/edit the local
 transcript, then **Ask text only** for a text answer. No raw audio or old screenshot
 is sent by that action. [Speech setup and workflow](docs/speech.md).
 
-The dark material and brighter secondary text remain readable over light windows.
+Clear glass is now the default, with a much more transparent canvas. In settings,
+choose Full clear or set Glass tint to0 for an untinted canvas; Readable78% remains
+available. Text/input controls keep their own backing. Appearance depends on
+Windows transparency and the underlying background, especially at zero tint.
 On Windows 11, the capsule uses a real compositor host-backdrop brush clipped to
 its rounded shape, behind the existing Qt controls. No rectangular Acrylic halo
 or background screenshot is used to simulate blur. Unsupported/disabled hosts
@@ -76,6 +79,18 @@ vision processing but does not guarantee lower total latency.
 Connection badges now distinguish Key entered, Auth rejected, Metadata accepted
 and Answer received. A401 does not erase your key or trigger retries; its cause
 remains a user/account evidence gate. [MVP paths and acceptance](docs/mvp.md).
+
+Glass tint saves with the other non-secret setup choices. Version1 setup files
+migrate without changing provider/model/pinning; no keys, content or approval are
+restored. Zero tint removes the painted canvas shade (including the former interior
+shadow fill), not the visible controls or optional native frost. Capture exclusion
+is still separately enabled each start and is not saved as consent.
+
+CI portable/installer builds now include both small offline English speech models.
+A build-time helper downloads only fixed official archives, verifies SHA256 and
+bounded safe extraction, stages both before publishing to a new destination, and
+refuses existing targets. There is no runtime download or microphone activation.
+Speech model availability is complete; recognition accuracy still needs user trial.
 
 ## First use
 

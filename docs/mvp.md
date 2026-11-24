@@ -12,8 +12,8 @@ control of what leaves the laptop. No continuous screen/audio watching or execut
 | Voice to text | Explicit prepare/Ready/Listen/Listening now/Stop, selected input/playback, editable transcript, text-only ask | Backend/worker and synthetic playback evidence; Indian-accent accuracy and opening words still need user acceptance |
 | Model connection | Free OpenRouter default, separately labelled paid OpenAI, provider-isolated session-memory keys, manual quota GET and auth states | User obtained text/image answers and quota; later401 remains undiagnosed pending same-instance quota result |
 | Answer handling | Quick/Explain/Hint/Debug, streaming, partial vs completed, cancellation, bounded follow-up/copy, clear answer/end session | Offline UI and real localhost streaming tests; current provider quality/availability not guaranteed |
-| Desktop overlay | Rounded native frost/fallback, pin/collapse, display fit, capture-exclusion capability readback | Owned Windows light/dark fixtures; personal scaling/recorders/native dialogs vary |
-| Distribution | Portable plus per-user installer, staged no-overwrite builds, runtime checks, integrity manifest, user-config retention | Windows CI lifecycle; unsigned and personal interrupted-upgrade/manual acceptance open |
+| Desktop overlay | Clear native frost/fallback, saved0–90tint and presets, pin/collapse, display fit, capture-exclusion capability readback | Owned Windows light/dark fixtures; personal scaling/recorders/native dialogs vary |
+| Distribution | Portable plus per-user installer, staged no-overwrite builds, runtime checks, integrity manifest, bundled US/Indian speech models, user-config retention | Windows CI lifecycle; unsigned and personal interrupted-upgrade/manual acceptance open |
 
 These are implemented workflows, not a claim that account access, microphone/OCR
 accuracy or all real-world acceptance is complete. No overall completion percentage.

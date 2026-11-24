@@ -148,3 +148,15 @@ Local model archive SHA25620663dcac4d5cb783a579c54d98339344a688e4ec6e1b4a4b059fd
 56,700,192 extracted bytes. Download from the official HTTPS source, safe prefix/
 size/no-link extraction. This hash records bytes, not an independent authenticity
 signature. No recording was made to test it in this iteration.
+
+
+## v0.13 ready distribution
+
+CI portable and per-user installer artifacts now bundle both small US/Indian
+English models, verified from fixed official archive SHA256 values at build time.
+Fresh installs can use the default folder or preset without downloading weights.
+The installer lifecycle checks actual bundled-model Ready, without recording.
+Builds deliberately made without --model remain possible for developers; their
+users must choose an extracted trusted folder. No runtime asset fetch occurs.
+A previously saved custom folder still takes priority; bundled availability does
+not establish personal recognition quality.
